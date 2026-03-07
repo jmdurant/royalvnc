@@ -7,16 +7,21 @@ final class VNCSession: ObservableObject {
     @Published var currentFrame: CGImage?
     @Published var status: VNCConnection.Status = .disconnected
     @Published var errorMessage: String?
+    @Published var showingCredentialPrompt = false
+    @Published var needsUsername = false
 
     private(set) var connection: VNCConnection?
-    private var storedUsername: String = ""
-    private var storedPassword: String = ""
     private var refreshTimer: Timer?
     private let delegateHandler = SessionDelegateHandler()
+    private var credentialCompletion: (((any VNCCredential)?) -> Void)?
+    private(set) var connectHostname: String = ""
+    private(set) var connectPort: UInt16 = 5900
+    private var triedSavedCredential = false
 
-    func connect(hostname: String, port: UInt16, username: String, password: String) {
-        storedUsername = username
-        storedPassword = password
+    func connect(hostname: String, port: UInt16) {
+        connectHostname = hostname
+        connectPort = port
+        triedSavedCredential = false
 
         let settings = VNCConnection.Settings(
             isDebugLoggingEnabled: false,
@@ -45,10 +50,36 @@ final class VNCSession: ObservableObject {
         connection = nil
     }
 
+    func submitCredentials(username: String, password: String) {
+        showingCredentialPrompt = false
+
+        // Save to Keychain
+        CredentialStore.save(host: connectHostname, port: connectPort, username: username, password: password)
+
+        guard let completion = credentialCompletion else { return }
+        credentialCompletion = nil
+
+        if needsUsername {
+            completion(VNCUsernamePasswordCredential(username: username, password: password))
+        } else {
+            completion(VNCPasswordCredential(password: password))
+        }
+    }
+
+    // MARK: - Delegate handlers
+
     fileprivate func handleStateChange(_ connectionState: VNCConnection.ConnectionState) {
         status = connectionState.status
+
         if let error = connectionState.error {
-            errorMessage = error.localizedDescription
+            let desc = error.localizedDescription
+
+            // If auth failed and we used saved credentials, clear them and show prompt
+            if triedSavedCredential && desc.lowercased().contains("auth") {
+                CredentialStore.delete(host: connectHostname, port: connectPort)
+            }
+
+            errorMessage = desc
         }
     }
 
@@ -56,27 +87,36 @@ final class VNCSession: ObservableObject {
         authenticationType: VNCAuthenticationType,
         completion: @escaping ((any VNCCredential)?) -> Void
     ) {
-        if authenticationType.requiresUsername && authenticationType.requiresPassword {
-            completion(VNCUsernamePasswordCredential(username: storedUsername, password: storedPassword))
-        } else if authenticationType.requiresPassword {
-            completion(VNCPasswordCredential(password: storedPassword))
-        } else {
-            completion(nil)
+        needsUsername = authenticationType.requiresUsername
+
+        // Try saved credentials first
+        if !triedSavedCredential, let saved = CredentialStore.load(host: connectHostname, port: connectPort) {
+            triedSavedCredential = true
+
+            if authenticationType.requiresUsername {
+                completion(VNCUsernamePasswordCredential(username: saved.username, password: saved.password))
+            } else {
+                completion(VNCPasswordCredential(password: saved.password))
+            }
+            return
         }
+
+        // No saved credentials or they failed — prompt the user
+        credentialCompletion = completion
+        showingCredentialPrompt = true
     }
 
     fileprivate func handleFramebufferCreated(_ framebuffer: VNCFramebuffer) {
-        startRefreshTimer(framebuffer: framebuffer)
+        startRefreshTimer()
     }
 
     fileprivate func handleFramebufferResized(_ framebuffer: VNCFramebuffer) {
         updateFrame(from: framebuffer)
     }
 
-    private func startRefreshTimer(framebuffer: VNCFramebuffer) {
+    private func startRefreshTimer() {
         refreshTimer?.invalidate()
 
-        // Refresh at ~15 FPS to balance performance and battery
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 15.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self,
@@ -91,7 +131,6 @@ final class VNCSession: ObservableObject {
     }
 }
 
-// Non-isolated delegate handler to bridge VNCConnectionDelegate callbacks to @MainActor
 private final class SessionDelegateHandler: NSObject, VNCConnectionDelegate {
     weak var session: VNCSession?
 
@@ -132,11 +171,9 @@ private final class SessionDelegateHandler: NSObject, VNCConnectionDelegate {
                     didUpdateFramebuffer framebuffer: VNCFramebuffer,
                     x: UInt16, y: UInt16,
                     width: UInt16, height: UInt16) {
-        // Frame updates are batched via the refresh timer
     }
 
     func connection(_ connection: VNCConnection,
                     didUpdateCursor cursor: VNCCursor) {
-        // Cursor not rendered on watchOS
     }
 }

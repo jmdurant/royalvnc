@@ -2,24 +2,20 @@ import SwiftUI
 import RoyalVNCKit
 
 struct ConnectView: View {
-    @State private var hostname = ""
-    @State private var port = "5900"
-    @State private var username = ""
-    @State private var password = ""
     @StateObject private var browser = BonjourBrowser()
+    @State private var savedProfiles: [ServerProfile] = []
 
     var body: some View {
         NavigationStack {
-            Form {
+            List {
+                // Nearby Servers (Bonjour)
                 if !browser.servers.isEmpty {
                     Section("Nearby Servers") {
                         ForEach(browser.servers) { server in
                             NavigationLink {
                                 SessionView(
                                     hostname: server.host,
-                                    port: server.port,
-                                    username: username,
-                                    password: password
+                                    port: server.port
                                 )
                             } label: {
                                 VStack(alignment: .leading) {
@@ -43,42 +39,66 @@ struct ConnectView: View {
                     }
                 }
 
-                Section("Manual") {
-                    TextField("Hostname", text: $hostname)
-                        .textInputAutocapitalization(.never)
-                        .disableAutocorrection(true)
-
-                    TextField("Port", text: $port)
+                // Saved Profiles
+                if !savedProfiles.isEmpty {
+                    Section("Saved") {
+                        ForEach(savedProfiles) { profile in
+                            NavigationLink {
+                                SessionView(
+                                    hostname: profile.hostname,
+                                    port: profile.port
+                                )
+                            } label: {
+                                VStack(alignment: .leading) {
+                                    Text(profile.name)
+                                        .font(.body)
+                                    Text("\(profile.hostname):\(profile.port)")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .onDelete(perform: deleteProfiles)
+                    }
                 }
 
-                Section("Authentication") {
-                    TextField("Username", text: $username)
-                        .textInputAutocapitalization(.never)
-                        .disableAutocorrection(true)
-                    SecureField("Password", text: $password)
-                }
-
+                // Create New Connection
                 Section {
                     NavigationLink {
-                        SessionView(
-                            hostname: hostname,
-                            port: UInt16(port) ?? 5900,
-                            username: username,
-                            password: password
-                        )
+                        CreateConnectionView(onSaved: reloadProfiles)
                     } label: {
-                        Text("Connect")
+                        Label("Create VNC Connection", systemImage: "plus.circle")
                     }
-                    .disabled(hostname.isEmpty)
                 }
             }
             .navigationTitle("RoyalVNC")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        ControlsInfoView()
+                    } label: {
+                        Image(systemName: "info.circle")
+                    }
+                }
+            }
             .onAppear {
                 browser.startBrowsing()
+                reloadProfiles()
             }
             .onDisappear {
                 browser.stopBrowsing()
             }
         }
+    }
+
+    private func reloadProfiles() {
+        savedProfiles = ProfileStore.loadAll()
+    }
+
+    private func deleteProfiles(at offsets: IndexSet) {
+        for index in offsets {
+            ProfileStore.delete(savedProfiles[index])
+        }
+        reloadProfiles()
     }
 }
