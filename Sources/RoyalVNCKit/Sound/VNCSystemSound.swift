@@ -8,6 +8,8 @@ import Foundation
 import AVFoundation
 #elseif os(macOS)
 import AppKit
+#elseif os(watchOS)
+import WatchKit
 #endif
 
 struct VNCSystemSound { }
@@ -21,6 +23,8 @@ extension VNCSystemSound {
         let systemSoundID: SystemSoundID = 1013
 
         AudioServicesPlaySystemSound(systemSoundID)
+#elseif os(watchOS)
+        WKInterfaceDevice.current().play(.click)
 #else
         // TODO: Implement beep on Linux/Windows/etc.
 #endif

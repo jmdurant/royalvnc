@@ -92,3 +92,6 @@ iOSInjectionProject/
 /Debug.xcconfig
 /Release.xcconfig
 *.profraw
+
+# XcodeGen generated projects
+WatchApp/*.xcodeproj/

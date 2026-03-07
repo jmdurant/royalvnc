@@ -1,0 +1,35 @@
+name: RoyalVNCWatch
+options:
+  bundleIdPrefix: com.royalapps.royalvnc
+  deploymentTarget:
+    watchOS: "10.0"
+  xcodeVersion: "16.0"
+  generateEmptyDirectories: true
+
+packages:
+  RoyalVNCKit:
+    path: ..
+
+targets:
+  RoyalVNCWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - path: ../Sources/RoyalVNCKitWatchDemo
+    dependencies:
+      - package: RoyalVNCKit
+        product: RoyalVNCKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.royalapps.royalvnc.watch
+        PRODUCT_NAME: RoyalVNC
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        INFOPLIST_KEY_WKApplication: YES
+        INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp: YES
+        INFOPLIST_KEY_WKCompanionAppBundleIdentifier: com.royalapps.royalvnc
+        GENERATE_INFOPLIST_FILE: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""

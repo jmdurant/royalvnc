@@ -180,17 +180,15 @@ public final class VNCFramebuffer: NSObjectOrAnyObject {
         if let allocator {
             self.allocator = allocator
         } else {
-#if canImport(IOSurface)
+#if canImport(IOSurface) && !os(watchOS)
             self.allocator = VNCFramebufferIOSurfaceAllocator(
                 width: width,
                 height: height,
                 bytesPerPixel: destinationProperties.bytesPerPixel,
                 bytesPerRow: destinationProperties.bytesPerRow
             )
-#elseif canImport(Glibc) || canImport(Android) || canImport(WinSDK)
-            self.allocator = VNCFramebufferMallocAllocator()
 #else
-            fatalError("Unsupported platform")
+            self.allocator = VNCFramebufferMallocAllocator()
 #endif
         }
         
@@ -238,7 +236,7 @@ public extension VNCFramebuffer {
 	}
 #endif
 
-#if canImport(CoreImage)
+#if canImport(CoreImage) && canImport(IOSurface) && canImport(CoreVideo)
     /// A Core Graphics image representation of the framebuffer contents, if available.
 #if canImport(ObjectiveC)
 	@objc
@@ -260,6 +258,39 @@ public extension VNCFramebuffer {
 
 		return finalImage
 	}
+#elseif canImport(CoreGraphics)
+    /// A Core Graphics image representation of the framebuffer contents, created directly from pixel data.
+    var cgImage: CGImage? {
+        guard framebufferHasBeenUpdatedAtLeastOnce else {
+            return nil
+        }
+
+        lockSurfaceReadOnly()
+        defer { unlockSurfaceReadOnly() }
+
+        let data = Data(bytes: surfaceAddress, count: surfaceByteCount)
+
+        guard let provider = CGDataProvider(data: data as CFData) else {
+            return nil
+        }
+
+        // Internal pixel format is BGRA8: byteOrder32Little + noneSkipFirst gives BGRA byte order
+        let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
+
+        return CGImage(
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bitsPerPixel: destinationProperties.bitsPerPixel,
+            bytesPerRow: destinationProperties.bytesPerRow,
+            space: Self.rgbColorSpace,
+            bitmapInfo: bitmapInfo,
+            provider: provider,
+            decode: nil,
+            shouldInterpolate: false,
+            intent: .defaultIntent
+        )
+    }
 #endif
 
 #if os(macOS)

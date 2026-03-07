@@ -33,7 +33,8 @@ let package = Package(
         .iOS(.v15),
         .macCatalyst(.v15),
         .tvOS(.v15),
-        .visionOS(.v1)
+        .visionOS(.v1),
+        .watchOS(.v10)
     ],
 
     products: [
@@ -91,6 +92,14 @@ let package = Package(
         .executableTarget(
             name: "RoyalVNCKitCDemo",
             dependencies: [ "RoyalVNCKit" ]
+        ),
+
+        .executableTarget(
+            name: "RoyalVNCKitWatchDemo",
+            dependencies: [ "RoyalVNCKit" ],
+            swiftSettings: [
+                .swiftLanguageMode(swiftLanguageMode)
+            ]
         )
     ]
 )
