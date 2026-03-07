@@ -19,6 +19,10 @@ struct SessionView: View {
     @State private var lastCrownValue: CGFloat = 0.0
     @State private var lastMousePosition: (x: UInt16, y: UInt16) = (0, 0)
     @State private var isZoomedIn = false
+    @State private var showingToolbar = false
+    @State private var showingKeyboard = false
+    @State private var keyboardText = ""
+    @State private var lastKeyboardText = ""
 
     var body: some View {
         GeometryReader { geometry in
@@ -55,7 +59,7 @@ struct SessionView: View {
                     .foregroundStyle(.red)
                 }
 
-                // Mode indicator
+                // Mode indicator (bottom right)
                 if session.status == .connected {
                     VStack {
                         Spacer()
@@ -75,10 +79,31 @@ struct SessionView: View {
                     .padding(4)
                     .allowsHitTesting(false)
                 }
+
+                // Swipe-up hint (bottom center)
+                if session.status == .connected && !showingToolbar {
+                    VStack {
+                        Spacer()
+                        Capsule()
+                            .fill(.white.opacity(0.3))
+                            .frame(width: 36, height: 4)
+                            .padding(.bottom, 2)
+                    }
+                    .allowsHitTesting(false)
+                }
+
+                // Swipe-up toolbar overlay
+                if showingToolbar {
+                    toolbarOverlay
+                }
             }
+            .gesture(swipeUpGesture)
         }
         .sheet(isPresented: $session.showingCredentialPrompt) {
             CredentialPromptView(session: session)
+        }
+        .sheet(isPresented: $showingKeyboard) {
+            KeyboardInputView(session: session)
         }
         .focusable()
         .digitalCrownRotation(
@@ -94,13 +119,11 @@ struct SessionView: View {
             lastCrownValue = newValue
 
             if inputMode == .interact {
-                // Scroll wheel
                 if abs(delta) > 0.5 {
                     let wheel: VNCMouseWheel = delta > 0 ? .down : .up
                     session.connection?.mouseWheel(wheel, x: lastMousePosition.x, y: lastMousePosition.y, steps: 1)
                 }
             } else {
-                // Zoom
                 let newZoom = max(0.5, min(5.0, zoomScale + delta * 0.05))
                 zoomScale = newZoom
                 if newZoom <= 1.0 {
@@ -108,44 +131,139 @@ struct SessionView: View {
                 }
             }
         }
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button {
-                    toggleMode()
-                } label: {
-                    Image(systemName: inputMode == .interact ? "hand.draw" : "cursorarrow")
-                }
-            }
-        }
+        .navigationBarHidden(true)
         .onAppear {
             session.connect(hostname: hostname, port: port)
         }
         .onDisappear {
             session.disconnect()
         }
-        .navigationBarBackButtonHidden(session.status == .connecting)
     }
 
-    private func toggleMode() {
-        inputMode = inputMode == .interact ? .navigate : .interact
+    // MARK: - Toolbar Overlay
+
+    private var toolbarOverlay: some View {
+        ZStack {
+            // Dismiss background
+            Color.black.opacity(0.5)
+                .onTapGesture { showingToolbar = false }
+
+            VStack(spacing: 8) {
+                Spacer()
+
+                // Toolbar buttons
+                VStack(spacing: 6) {
+                    HStack(spacing: 8) {
+                        toolbarButton(
+                            icon: inputMode == .interact ? "hand.draw" : "cursorarrow",
+                            label: inputMode == .interact ? "Pan" : "Pointer"
+                        ) {
+                            inputMode = inputMode == .interact ? .navigate : .interact
+                            showingToolbar = false
+                        }
+
+                        toolbarButton(icon: "keyboard", label: "Keyboard") {
+                            showingToolbar = false
+                            showingKeyboard = true
+                        }
+                    }
+
+                    HStack(spacing: 8) {
+                        toolbarButton(icon: "escape", label: "Esc") {
+                            sendKey(.escape)
+                            showingToolbar = false
+                        }
+
+                        toolbarButton(icon: "return.left", label: "Return") {
+                            sendKey(.return)
+                            showingToolbar = false
+                        }
+                    }
+
+                    HStack(spacing: 8) {
+                        toolbarButton(icon: "delete.backward", label: "Delete") {
+                            sendKey(.delete)
+                            showingToolbar = false
+                        }
+
+                        toolbarButton(icon: "tab", label: "Tab") {
+                            sendKey(.tab)
+                            showingToolbar = false
+                        }
+                    }
+
+                    HStack(spacing: 8) {
+                        toolbarButton(icon: "power", label: "Ctrl+Alt+Del") {
+                            sendCtrlAltDel()
+                            showingToolbar = false
+                        }
+
+                        toolbarButton(icon: "xmark.circle", label: "Disconnect") {
+                            showingToolbar = false
+                            session.disconnect()
+                        }
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 8)
+            }
+        }
+    }
+
+    private func toolbarButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                Image(systemName: icon)
+                    .font(.body)
+                Text(label)
+                    .font(.system(size: 9))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Key Sending
+
+    private func sendKey(_ key: VNCKeyCode) {
+        session.connection?.keyDown(key)
+        session.connection?.keyUp(key)
+    }
+
+    private func sendCtrlAltDel() {
+        session.connection?.keyDown(.control)
+        session.connection?.keyDown(.option)
+        session.connection?.keyDown(.forwardDelete)
+        session.connection?.keyUp(.forwardDelete)
+        session.connection?.keyUp(.option)
+        session.connection?.keyUp(.control)
     }
 
     // MARK: - Gestures
 
-    // Double tap: interact = double click, navigate = zoom toggle
+    private var swipeUpGesture: some Gesture {
+        DragGesture(minimumDistance: 20)
+            .onEnded { value in
+                if value.translation.height < -30 && abs(value.translation.width) < 50 {
+                    showingToolbar = true
+                }
+            }
+    }
+
     private func doubleTapGesture(in geometry: GeometryProxy, frameSize: CGSize) -> some Gesture {
         SpatialTapGesture(count: 2)
             .onEnded { value in
                 if inputMode == .interact {
                     let vncPoint = viewToVNC(point: value.location, viewSize: geometry.size, frameSize: frameSize)
                     lastMousePosition = vncPoint
-                    // Double click
                     session.connection?.mouseButtonDown(.left, x: vncPoint.x, y: vncPoint.y)
                     session.connection?.mouseButtonUp(.left, x: vncPoint.x, y: vncPoint.y)
                     session.connection?.mouseButtonDown(.left, x: vncPoint.x, y: vncPoint.y)
                     session.connection?.mouseButtonUp(.left, x: vncPoint.x, y: vncPoint.y)
                 } else {
-                    // Zoom toggle
                     withAnimation(.easeInOut(duration: 0.25)) {
                         if isZoomedIn {
                             zoomScale = 1.0
@@ -153,7 +271,6 @@ struct SessionView: View {
                             isZoomedIn = false
                         } else {
                             zoomScale = 2.5
-                            // Center zoom on tap point
                             let center = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
                             panOffset.width = (center.x - value.location.x) * 1.5
                             panOffset.height = (center.y - value.location.y) * 1.5
@@ -164,7 +281,6 @@ struct SessionView: View {
             }
     }
 
-    // Single tap: left click in both modes
     private func singleTapGesture(in geometry: GeometryProxy, frameSize: CGSize) -> some Gesture {
         SpatialTapGesture(count: 1)
             .onEnded { value in
@@ -175,7 +291,6 @@ struct SessionView: View {
             }
     }
 
-    // Long press: interact = right click
     private func longPressGesture(in geometry: GeometryProxy, frameSize: CGSize) -> some Gesture {
         LongPressGesture(minimumDuration: 0.5)
             .sequenced(before: SpatialTapGesture())
@@ -195,7 +310,6 @@ struct SessionView: View {
             }
     }
 
-    // Drag: interact = move mouse, navigate = pan viewport
     private func dragGesture(in geometry: GeometryProxy, frameSize: CGSize) -> some Gesture {
         DragGesture(minimumDistance: 3)
             .onChanged { value in
@@ -250,6 +364,68 @@ struct SessionView: View {
         return (vncX, vncY)
     }
 }
+
+// MARK: - Keyboard Input
+
+struct KeyboardInputView: View {
+    @ObservedObject var session: VNCSession
+    @State private var text = ""
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        VStack(spacing: 8) {
+            TextField("Type here...", text: $text)
+                .focused($isFocused)
+                .disableAutocorrection(true)
+                .onChange(of: text) { newValue in
+                    sendNewCharacters(old: String(text.dropLast(max(0, newValue.count - text.count + 1))), new: newValue)
+                }
+                .onSubmit {
+                    sendKey(.return)
+                }
+
+            HStack(spacing: 8) {
+                Button("Esc") { sendKey(.escape) }
+                    .font(.caption)
+                Button("Tab") { sendKey(.tab) }
+                    .font(.caption)
+                Button("Del") { sendKey(.delete) }
+                    .font(.caption)
+            }
+        }
+        .padding()
+        .onAppear {
+            isFocused = true
+        }
+    }
+
+    private func sendNewCharacters(old: String, new: String) {
+        if new.count < old.count {
+            // Characters were deleted
+            let deletions = old.count - new.count
+            for _ in 0..<deletions {
+                sendKey(.delete)
+            }
+        } else if new.count > old.count {
+            // Characters were added
+            let addedChars = new.suffix(new.count - old.count)
+            for char in addedChars {
+                let keyCodes = VNCKeyCode.withCharacter(char)
+                for keyCode in keyCodes {
+                    session.connection?.keyDown(keyCode)
+                    session.connection?.keyUp(keyCode)
+                }
+            }
+        }
+    }
+
+    private func sendKey(_ key: VNCKeyCode) {
+        session.connection?.keyDown(key)
+        session.connection?.keyUp(key)
+    }
+}
+
+// MARK: - Credential Prompt
 
 struct CredentialPromptView: View {
     @ObservedObject var session: VNCSession

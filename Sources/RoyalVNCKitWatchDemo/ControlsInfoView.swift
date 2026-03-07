@@ -3,10 +3,8 @@ import SwiftUI
 struct ControlsInfoView: View {
     var body: some View {
         List {
-            Section {
-                Text("Toggle between modes using the toolbar button. On Apple Watch Ultra, use the Action Button.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+            Section("Toolbar") {
+                controlRow(icon: "chevron.up", title: "Swipe Up", description: "Open toolbar with keyboard, mode toggle, special keys, and disconnect")
             }
 
             Section("Pointer Mode") {
@@ -26,8 +24,15 @@ struct ControlsInfoView: View {
                 controlRow(icon: "digitalcrown.arrow.clockwise", title: "Digital Crown", description: "Fine zoom control")
             }
 
-            Section("General") {
-                controlRow(icon: "chevron.left", title: "Back", description: "Swipe right to disconnect")
+            Section("Toolbar Actions") {
+                controlRow(icon: "cursorarrow", title: "Pointer / Pan", description: "Toggle input mode")
+                controlRow(icon: "keyboard", title: "Keyboard", description: "Open text input")
+                controlRow(icon: "escape", title: "Esc", description: "Send Escape key")
+                controlRow(icon: "return.left", title: "Return", description: "Send Return key")
+                controlRow(icon: "delete.backward", title: "Delete", description: "Send Delete key")
+                controlRow(icon: "tab", title: "Tab", description: "Send Tab key")
+                controlRow(icon: "power", title: "Ctrl+Alt+Del", description: "Send Ctrl+Alt+Delete")
+                controlRow(icon: "xmark.circle", title: "Disconnect", description: "End VNC session")
             }
         }
         .navigationTitle("Controls")

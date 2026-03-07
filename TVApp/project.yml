@@ -1,0 +1,31 @@
+name: RoyalVNCTV
+options:
+  bundleIdPrefix: com.royalapps.royalvnc
+  deploymentTarget:
+    tvOS: "16.0"
+  xcodeVersion: "16.0"
+  generateEmptyDirectories: true
+
+packages:
+  RoyalVNCKit:
+    path: ..
+
+targets:
+  RoyalVNCTV:
+    type: application
+    platform: tvOS
+    sources:
+      - path: ../Sources/RoyalVNCKitTVDemo
+    dependencies:
+      - package: RoyalVNCKit
+        product: RoyalVNCKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.royalapps.royalvnc.tv
+        PRODUCT_NAME: RoyalVNC
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""

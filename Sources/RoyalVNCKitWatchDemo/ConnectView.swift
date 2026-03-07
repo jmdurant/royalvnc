@@ -74,10 +74,18 @@ struct ConnectView: View {
             .navigationTitle("RoyalVNC")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink {
-                        ControlsInfoView()
-                    } label: {
-                        Image(systemName: "info.circle")
+                    HStack {
+                        NavigationLink {
+                            SettingsView()
+                        } label: {
+                            Image(systemName: "gearshape")
+                        }
+
+                        NavigationLink {
+                            ControlsInfoView()
+                        } label: {
+                            Image(systemName: "info.circle")
+                        }
                     }
                 }
             }
