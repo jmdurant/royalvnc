@@ -4,8 +4,39 @@ import RoyalVNCKit
 struct SettingsView: View {
     @ObservedObject var settings = ConnectionSettings.shared
 
+    private var sensitivityLabel: String {
+        let pct = Int(settings.cursorSensitivity * 100)
+        return "\(pct)%"
+    }
+
     var body: some View {
         Form {
+            Section(header: Text("Remote Control"), footer: Text("Adjust how fast the cursor moves when swiping on the Siri Remote.")) {
+                HStack {
+                    Text("Cursor Speed")
+                    Spacer()
+                    Text(sensitivityLabel)
+                        .foregroundColor(.secondary)
+                }
+                HStack {
+                    Button {
+                        settings.cursorSensitivity = max(0.25, settings.cursorSensitivity - 0.25)
+                    } label: {
+                        Image(systemName: "minus.circle")
+                    }
+                    .disabled(settings.cursorSensitivity <= 0.25)
+
+                    Spacer()
+
+                    Button {
+                        settings.cursorSensitivity = min(3.0, settings.cursorSensitivity + 0.25)
+                    } label: {
+                        Image(systemName: "plus.circle")
+                    }
+                    .disabled(settings.cursorSensitivity >= 3.0)
+                }
+            }
+
             Section(header: Text("Color Depth")) {
                 Picker("Color Depth", selection: $settings.colorDepth) {
                     Text("8-bit (256 Colors)").tag(VNCConnection.Settings.ColorDepth.depth8Bit)
@@ -32,6 +63,7 @@ struct SettingsView: View {
                     settings.isShared = true
                     settings.isScalingEnabled = true
                     settings.isClipboardRedirectionEnabled = false
+                    settings.cursorSensitivity = ConnectionSettings.defaultCursorSensitivity
                     settings.frameEncodings = .default
                 }
             }

@@ -128,7 +128,8 @@ struct SessionView: View {
 
         // Trackpad for mouse movement
         micro.dpad.valueChangedHandler = { [self] _, xValue, yValue in
-            let sensitivity: CGFloat = 0.015
+            let baseSensitivity: CGFloat = 0.015
+            let sensitivity = baseSensitivity * CGFloat(ConnectionSettings.shared.cursorSensitivity)
 
             cursorX = max(0, min(1, cursorX + CGFloat(xValue) * sensitivity))
             cursorY = max(0, min(1, cursorY - CGFloat(yValue) * sensitivity))

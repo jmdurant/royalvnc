@@ -19,9 +19,15 @@ final class ConnectionSettings: ObservableObject {
     @Published var frameEncodings: [VNCFrameEncodingType] {
         didSet { save() }
     }
+    /// Cursor sensitivity multiplier (0.5 = slow, 1.0 = default, 2.0 = fast)
+    @Published var cursorSensitivity: Double {
+        didSet { save() }
+    }
 
     private let defaults = UserDefaults.standard
     private let prefix = "vnc_settings_"
+
+    static let defaultCursorSensitivity: Double = 1.0
 
     private init() {
         let depth = defaults.integer(forKey: prefix + "colorDepth")
@@ -29,6 +35,7 @@ final class ConnectionSettings: ObservableObject {
         self.isShared = defaults.object(forKey: prefix + "isShared") as? Bool ?? true
         self.isScalingEnabled = defaults.object(forKey: prefix + "isScalingEnabled") as? Bool ?? true
         self.isClipboardRedirectionEnabled = defaults.object(forKey: prefix + "clipboard") as? Bool ?? false
+        self.cursorSensitivity = defaults.object(forKey: prefix + "cursorSensitivity") as? Double ?? Self.defaultCursorSensitivity
 
         if let saved = defaults.stringArray(forKey: prefix + "frameEncodings") {
             self.frameEncodings = [VNCFrameEncodingType].decode(saved)
@@ -42,6 +49,7 @@ final class ConnectionSettings: ObservableObject {
         defaults.set(isShared, forKey: prefix + "isShared")
         defaults.set(isScalingEnabled, forKey: prefix + "isScalingEnabled")
         defaults.set(isClipboardRedirectionEnabled, forKey: prefix + "clipboard")
+        defaults.set(cursorSensitivity, forKey: prefix + "cursorSensitivity")
         defaults.set(frameEncodings.encode(), forKey: prefix + "frameEncodings")
     }
 }
