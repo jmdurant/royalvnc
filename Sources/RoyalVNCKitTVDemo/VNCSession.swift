@@ -1,3 +1,4 @@
+#if os(tvOS)
 import SwiftUI
 import RoyalVNCKit
 import CoreGraphics
@@ -178,3 +179,4 @@ private final class SessionDelegateHandler: NSObject, VNCConnectionDelegate {
                     didUpdateCursor cursor: VNCCursor) {
     }
 }
+#endif

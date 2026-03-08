@@ -1,3 +1,4 @@
+#if os(watchOS)
 import Foundation
 import Network
 
@@ -132,3 +133,4 @@ final class BonjourBrowser: ObservableObject {
         connection.start(queue: .main)
     }
 }
+#endif

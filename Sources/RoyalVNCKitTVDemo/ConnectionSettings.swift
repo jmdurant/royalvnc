@@ -1,3 +1,4 @@
+#if os(tvOS)
 import Foundation
 import RoyalVNCKit
 
@@ -53,3 +54,4 @@ final class ConnectionSettings: ObservableObject {
         defaults.set(frameEncodings.encode(), forKey: prefix + "frameEncodings")
     }
 }
+#endif

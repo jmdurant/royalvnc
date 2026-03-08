@@ -1,3 +1,4 @@
+#if os(watchOS)
 import Foundation
 import Security
 
@@ -68,3 +69,4 @@ enum CredentialStore {
         SecItemDelete(query as CFDictionary)
     }
 }
+#endif

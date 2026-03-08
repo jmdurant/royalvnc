@@ -1,3 +1,4 @@
+#if os(watchOS)
 import SwiftUI
 
 @main
@@ -8,3 +9,9 @@ struct RoyalVNCWatchApp: App {
         }
     }
 }
+#else
+@main
+struct RoyalVNCWatchApp {
+    static func main() {}
+}
+#endif

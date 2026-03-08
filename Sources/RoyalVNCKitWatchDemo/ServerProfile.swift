@@ -1,3 +1,4 @@
+#if os(watchOS)
 import Foundation
 
 struct ServerProfile: Identifiable, Codable, Hashable {
@@ -51,3 +52,4 @@ enum ProfileStore {
         saveAll(profiles)
     }
 }
+#endif

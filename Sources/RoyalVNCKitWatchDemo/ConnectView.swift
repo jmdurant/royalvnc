@@ -1,3 +1,4 @@
+#if os(watchOS)
 import SwiftUI
 import RoyalVNCKit
 
@@ -110,3 +111,4 @@ struct ConnectView: View {
         reloadProfiles()
     }
 }
+#endif

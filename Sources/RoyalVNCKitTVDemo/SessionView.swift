@@ -1,3 +1,4 @@
+#if os(tvOS)
 import SwiftUI
 import RoyalVNCKit
 import GameController
@@ -342,3 +343,4 @@ struct CredentialPromptView: View {
         }
     }
 }
+#endif

@@ -1,3 +1,4 @@
+#if os(watchOS)
 import SwiftUI
 
 struct CreateConnectionView: View {
@@ -88,3 +89,4 @@ struct CreateConnectionView: View {
         String(current.dropLast())
     }
 }
+#endif

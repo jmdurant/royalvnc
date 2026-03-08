@@ -1,3 +1,4 @@
+#if os(watchOS)
 import SwiftUI
 
 struct ControlsInfoView: View {
@@ -55,3 +56,4 @@ struct ControlsInfoView: View {
         }
     }
 }
+#endif

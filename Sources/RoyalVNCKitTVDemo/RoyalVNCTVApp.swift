@@ -1,3 +1,4 @@
+#if os(tvOS)
 import SwiftUI
 
 @main
@@ -8,3 +9,9 @@ struct RoyalVNCTVApp: App {
         }
     }
 }
+#else
+@main
+struct RoyalVNCTVApp {
+    static func main() {}
+}
+#endif

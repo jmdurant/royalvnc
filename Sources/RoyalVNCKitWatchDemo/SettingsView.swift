@@ -1,3 +1,4 @@
+#if os(watchOS)
 import SwiftUI
 import RoyalVNCKit
 
@@ -61,3 +62,4 @@ struct SettingsView: View {
         )
     }
 }
+#endif

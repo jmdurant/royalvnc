@@ -1,3 +1,4 @@
+#if os(tvOS)
 import SwiftUI
 import RoyalVNCKit
 
@@ -92,3 +93,4 @@ struct SettingsView: View {
         )
     }
 }
+#endif

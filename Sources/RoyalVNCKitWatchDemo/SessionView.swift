@@ -1,3 +1,4 @@
+#if os(watchOS)
 import SwiftUI
 import RoyalVNCKit
 
@@ -459,3 +460,4 @@ struct CredentialPromptView: View {
         }
     }
 }
+#endif

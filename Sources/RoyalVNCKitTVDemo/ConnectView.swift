@@ -1,3 +1,4 @@
+#if os(tvOS)
 import SwiftUI
 import RoyalVNCKit
 
@@ -181,3 +182,4 @@ struct CreateConnectionView: View {
         }
     }
 }
+#endif
