@@ -1,6 +1,29 @@
 #if os(iOS)
 import Foundation
+import SwiftUI
 import RoyalVNCKit
+
+enum AppAppearance: Int, CaseIterable {
+    case system = 0
+    case light = 1
+    case dark = 2
+
+    var label: String {
+        switch self {
+        case .system: return "System"
+        case .light: return "Light"
+        case .dark: return "Dark"
+        }
+    }
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+}
 
 final class ConnectionSettings: ObservableObject {
     static let shared = ConnectionSettings()
@@ -20,6 +43,9 @@ final class ConnectionSettings: ObservableObject {
     @Published var frameEncodings: [VNCFrameEncodingType] {
         didSet { save() }
     }
+    @Published var appearance: AppAppearance {
+        didSet { save() }
+    }
 
     private let defaults = UserDefaults.standard
     private let prefix = "vnc_settings_"
@@ -30,6 +56,7 @@ final class ConnectionSettings: ObservableObject {
         self.isShared = defaults.object(forKey: prefix + "isShared") as? Bool ?? true
         self.isScalingEnabled = defaults.object(forKey: prefix + "isScalingEnabled") as? Bool ?? true
         self.isClipboardRedirectionEnabled = defaults.object(forKey: prefix + "clipboard") as? Bool ?? false
+        self.appearance = AppAppearance(rawValue: defaults.integer(forKey: prefix + "appearance")) ?? .system
 
         if let saved = defaults.stringArray(forKey: prefix + "frameEncodings") {
             self.frameEncodings = [VNCFrameEncodingType].decode(saved)
@@ -44,6 +71,7 @@ final class ConnectionSettings: ObservableObject {
         defaults.set(isScalingEnabled, forKey: prefix + "isScalingEnabled")
         defaults.set(isClipboardRedirectionEnabled, forKey: prefix + "clipboard")
         defaults.set(frameEncodings.encode(), forKey: prefix + "frameEncodings")
+        defaults.set(appearance.rawValue, forKey: prefix + "appearance")
     }
 }
 #endif

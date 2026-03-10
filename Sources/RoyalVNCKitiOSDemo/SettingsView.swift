@@ -7,6 +7,15 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            Section("Appearance") {
+                Picker("Theme", selection: $settings.appearance) {
+                    ForEach(AppAppearance.allCases, id: \.self) { mode in
+                        Text(mode.label).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
             Section("Color Depth") {
                 Picker("Color Depth", selection: $settings.colorDepth) {
                     Text("8-bit (256 Colors)").tag(VNCConnection.Settings.ColorDepth.depth8Bit)
@@ -34,6 +43,7 @@ struct SettingsView: View {
                     settings.isScalingEnabled = true
                     settings.isClipboardRedirectionEnabled = false
                     settings.frameEncodings = .default
+                    settings.appearance = .system
                 }
             }
         }
