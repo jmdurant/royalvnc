@@ -1,5 +1,6 @@
 package com.example.royalvncandroidtest
 
+import android.content.pm.PackageManager
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -7,7 +8,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.royalapps.royalvnc.VncColorDepth
 import com.royalapps.royalvnc.VncFrameEncodingType
@@ -18,11 +21,17 @@ fun SettingsScreen(
     settings: ConnectionSettings,
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
+    val isTv = remember {
+        context.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+    }
+
     var colorDepth by remember { mutableStateOf(settings.colorDepth) }
     var isShared by remember { mutableStateOf(settings.isShared) }
     var isScaling by remember { mutableStateOf(settings.isScalingEnabled) }
     var isClipboard by remember { mutableStateOf(settings.isClipboardRedirectionEnabled) }
     var encodings by remember { mutableStateOf(settings.frameEncodings) }
+    var cursorSpeed by remember { mutableIntStateOf(settings.cursorSpeed) }
 
     Scaffold(
         topBar = {
@@ -112,6 +121,45 @@ fun SettingsScreen(
                 }
             }
 
+            // Cursor Speed (TV only)
+            if (isTv) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+                Text("Cursor Speed", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            cursorSpeed = (cursorSpeed - 2).coerceAtLeast(2)
+                            settings.cursorSpeed = cursorSpeed
+                        },
+                        enabled = cursorSpeed > 2
+                    ) {
+                        Text("-")
+                    }
+                    Text(
+                        "${cursorSpeed}px",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            cursorSpeed = (cursorSpeed + 2).coerceAtMost(40)
+                            settings.cursorSpeed = cursorSpeed
+                        },
+                        enabled = cursorSpeed < 40
+                    ) {
+                        Text("+")
+                    }
+                }
+            }
+
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
             // Connection Options
@@ -171,6 +219,7 @@ fun SettingsScreen(
                     isScaling = true
                     isClipboard = false
                     encodings = ConnectionSettings.DEFAULT_ENCODINGS
+                    cursorSpeed = ConnectionSettings.DEFAULT_CURSOR_SPEED
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {

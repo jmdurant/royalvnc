@@ -1,5 +1,6 @@
 package com.example.royalvncandroidtest
 
+import android.content.pm.PackageManager
 import android.os.*
 import android.widget.Toast
 import androidx.activity.compose.*
@@ -25,6 +26,7 @@ class MainActivity : ComponentActivity() {
         val credentialStore = CredentialStore(context)
         val connectionSettings = ConnectionSettings(context)
         nsdBrowser = NsdBrowser(context)
+        val isTv = packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
 
         enableEdgeToEdge()
 
@@ -70,14 +72,26 @@ class MainActivity : ComponentActivity() {
 
                     Screen.SESSION -> {
                         vncSession?.let { session ->
-                            SessionScreen(
-                                session = session,
-                                onDisconnected = {
-                                    vncSession?.close()
-                                    vncSession = null
-                                    currentScreen = Screen.CONNECT
-                                }
-                            )
+                            if (isTv) {
+                                TvSessionScreen(
+                                    session = session,
+                                    settings = connectionSettings,
+                                    onDisconnected = {
+                                        vncSession?.close()
+                                        vncSession = null
+                                        currentScreen = Screen.CONNECT
+                                    }
+                                )
+                            } else {
+                                SessionScreen(
+                                    session = session,
+                                    onDisconnected = {
+                                        vncSession?.close()
+                                        vncSession = null
+                                        currentScreen = Screen.CONNECT
+                                    }
+                                )
+                            }
                         } ?: run {
                             currentScreen = Screen.CONNECT
                         }

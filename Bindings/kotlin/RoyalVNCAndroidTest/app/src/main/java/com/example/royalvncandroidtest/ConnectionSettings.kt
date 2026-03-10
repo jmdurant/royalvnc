@@ -37,6 +37,12 @@ class ConnectionSettings(context: Context) {
             prefs.edit().putBoolean("clipboard", value).apply()
         }
 
+    var cursorSpeed: Int
+        get() = prefs.getInt("cursor_speed", DEFAULT_CURSOR_SPEED)
+        set(value) {
+            prefs.edit().putInt("cursor_speed", value.coerceIn(2, 40)).apply()
+        }
+
     var frameEncodings: List<VncFrameEncodingType>
         get() {
             val stored = prefs.getString("encodings", null) ?: return DEFAULT_ENCODINGS
@@ -57,6 +63,8 @@ class ConnectionSettings(context: Context) {
     }
 
     companion object {
+        const val DEFAULT_CURSOR_SPEED = 10
+
         val ALL_ENCODINGS = listOf(
             VncFrameEncodingType.TIGHT,
             VncFrameEncodingType.ZLIB,
