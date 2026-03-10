@@ -1,0 +1,34 @@
+name: RoyalVNCiOS
+options:
+  bundleIdPrefix: com.royalapps.royalvnc
+  deploymentTarget:
+    iOS: "16.0"
+  xcodeVersion: "16.0"
+  generateEmptyDirectories: true
+
+packages:
+  RoyalVNCKit:
+    path: ..
+
+targets:
+  RoyalVNCiOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: ../Sources/RoyalVNCKitiOSDemo
+    dependencies:
+      - package: RoyalVNCKit
+        product: RoyalVNCKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.royalapps.royalvnc.ios
+        PRODUCT_NAME: RoyalVNC
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"

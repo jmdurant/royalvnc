@@ -96,3 +96,4 @@ iOSInjectionProject/
 # XcodeGen generated projects
 WatchApp/*.xcodeproj/
 TVApp/*.xcodeproj/
+iOSApp/*.xcodeproj/

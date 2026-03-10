@@ -108,6 +108,14 @@ let package = Package(
             swiftSettings: [
                 .swiftLanguageMode(swiftLanguageMode)
             ]
+        ),
+
+        .executableTarget(
+            name: "RoyalVNCKitiOSDemo",
+            dependencies: [ "RoyalVNCKit" ],
+            swiftSettings: [
+                .swiftLanguageMode(swiftLanguageMode)
+            ]
         )
     ]
 )
