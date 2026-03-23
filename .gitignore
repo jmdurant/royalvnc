@@ -97,3 +97,4 @@ iOSInjectionProject/
 WatchApp/*.xcodeproj/
 TVApp/*.xcodeproj/
 iOSApp/*.xcodeproj/
+.mcp.json
