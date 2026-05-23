@@ -100,7 +100,9 @@ struct SessionView: View {
             }
             .gesture(swipeUpGesture)
         }
-        .sheet(isPresented: $session.showingCredentialPrompt) {
+        .sheet(isPresented: $session.showingCredentialPrompt, onDismiss: {
+            session.cancelAuthentication()
+        }) {
             CredentialPromptView(session: session)
         }
         .sheet(isPresented: $showingKeyboard) {

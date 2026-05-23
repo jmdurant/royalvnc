@@ -16,6 +16,8 @@ struct SessionView: View {
 
     // Viewport state
     @State private var zoomScale: CGFloat = 1.0
+    @State private var baseZoomScale: CGFloat = 1.0
+    @State private var isPinching = false
     @State private var panOffset: CGSize = .zero
     @State private var lastDragTranslation: CGSize = .zero
 
@@ -119,7 +121,9 @@ struct SessionView: View {
         .ignoresSafeArea()
         .navigationBarHidden(true)
         .statusBarHidden(true)
-        .sheet(isPresented: $session.showingCredentialPrompt) {
+        .sheet(isPresented: $session.showingCredentialPrompt, onDismiss: {
+            session.cancelAuthentication()
+        }) {
             CredentialPromptView(session: session)
         }
         .sheet(isPresented: $showingKeyboard) {
@@ -247,16 +251,24 @@ struct SessionView: View {
             }
     }
 
-    // Pinch to zoom
+    // Pinch to zoom. `value` is relative to the start of each gesture, so we
+    // anchor it to the zoom level already in effect (captured on first change)
+    // instead of snapping back toward 1.0 every time a new pinch begins.
     private var magnificationGesture: some Gesture {
         MagnificationGesture()
             .onChanged { value in
-                zoomScale = max(0.5, min(5.0, value))
+                if !isPinching {
+                    isPinching = true
+                    baseZoomScale = zoomScale
+                }
+                zoomScale = max(0.5, min(5.0, baseZoomScale * value))
             }
             .onEnded { _ in
+                isPinching = false
                 if zoomScale < 1.0 {
                     withAnimation { zoomScale = 1.0; panOffset = .zero }
                 }
+                baseZoomScale = zoomScale
             }
     }
 

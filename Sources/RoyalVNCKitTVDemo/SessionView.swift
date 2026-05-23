@@ -49,7 +49,9 @@ struct SessionView: View {
                 }
             }
         }
-        .sheet(isPresented: $session.showingCredentialPrompt) {
+        .sheet(isPresented: $session.showingCredentialPrompt, onDismiss: {
+            session.cancelAuthentication()
+        }) {
             CredentialPromptView(session: session)
         }
         .sheet(isPresented: $showingToolbar) {

@@ -18,6 +18,7 @@ final class VNCSession: ObservableObject {
     private(set) var connectHostname: String = ""
     private(set) var connectPort: UInt16 = 5900
     private var triedSavedCredential = false
+    private var framebufferNeedsDisplay = false
 
     func connect(hostname: String, port: UInt16) {
         connectHostname = hostname
@@ -67,19 +68,31 @@ final class VNCSession: ObservableObject {
         }
     }
 
+    func cancelAuthentication() {
+        guard let completion = credentialCompletion else { return }
+        credentialCompletion = nil
+        completion(nil)
+        disconnect()
+    }
+
     // MARK: - Delegate handlers
 
     fileprivate func handleStateChange(_ connectionState: VNCConnection.ConnectionState) {
         status = connectionState.status
 
-        if let error = connectionState.error {
-            let desc = error.localizedDescription
+        guard let error = connectionState.error else { return }
+        let vncError = error as? VNCError
 
-            if triedSavedCredential && desc.lowercased().contains("auth") {
-                CredentialStore.delete(host: connectHostname, port: connectPort)
-            }
+        // If authentication failed while using saved credentials, discard them
+        // so the user is prompted again on the next attempt.
+        if triedSavedCredential, vncError?.isAuthenticationError == true {
+            CredentialStore.delete(host: connectHostname, port: connectPort)
+        }
 
-            errorMessage = desc
+        // Suppress errors the SDK considers non-user-facing (e.g. a normal
+        // disconnect or a cancelled connection). Unknown error types are shown.
+        if vncError?.shouldDisplayToUser ?? true {
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -105,6 +118,7 @@ final class VNCSession: ObservableObject {
     }
 
     fileprivate func handleFramebufferCreated(_ framebuffer: VNCFramebuffer) {
+        framebufferNeedsDisplay = true
         startRefreshTimer()
     }
 
@@ -112,13 +126,21 @@ final class VNCSession: ObservableObject {
         updateFrame(from: framebuffer)
     }
 
+    fileprivate func handleFramebufferUpdated() {
+        framebufferNeedsDisplay = true
+    }
+
     private func startRefreshTimer() {
         refreshTimer?.invalidate()
 
+        // The timer caps the redraw rate; the dirty flag ensures we only rebuild
+        // the CGImage when the framebuffer actually changed, so a static remote
+        // screen costs almost nothing.
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self,
+                guard let self, self.framebufferNeedsDisplay,
                       let framebuffer = self.connection?.framebuffer else { return }
+                self.framebufferNeedsDisplay = false
                 self.updateFrame(from: framebuffer)
             }
         }
@@ -169,6 +191,9 @@ private final class SessionDelegateHandler: NSObject, VNCConnectionDelegate {
                     didUpdateFramebuffer framebuffer: VNCFramebuffer,
                     x: UInt16, y: UInt16,
                     width: UInt16, height: UInt16) {
+        Task { @MainActor [weak self] in
+            self?.session?.handleFramebufferUpdated()
+        }
     }
 
     func connection(_ connection: VNCConnection,
