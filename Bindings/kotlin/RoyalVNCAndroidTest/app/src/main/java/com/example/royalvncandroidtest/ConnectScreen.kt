@@ -1,15 +1,18 @@
 package com.example.royalvncandroidtest
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.StateFlow
 
@@ -104,6 +107,7 @@ fun ConnectScreen(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .tvFocusHighlight()
                             .clickable { onConnect(server.hostname, server.port) }
                     ) {
                         Row(
@@ -142,6 +146,7 @@ fun ConnectScreen(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .tvFocusHighlight()
                             .clickable { onConnect(profile.hostname, profile.port) }
                     ) {
                         Row(
@@ -243,4 +248,27 @@ fun ConnectScreen(
             }
         )
     }
+}
+
+/**
+ * Draws a primary-colored border around the element while it holds D-pad focus,
+ * giving Android TV users a clear indication of the current selection. On touch
+ * devices focus is never traversed, so nothing is drawn.
+ */
+@Composable
+private fun Modifier.tvFocusHighlight(): Modifier {
+    var focused by remember { mutableStateOf(false) }
+    return this
+        .onFocusChanged { focused = it.isFocused }
+        .then(
+            if (focused) {
+                Modifier.border(
+                    width = 3.dp,
+                    color = MaterialTheme.colorScheme.primary,
+                    shape = RoundedCornerShape(12.dp)
+                )
+            } else {
+                Modifier
+            }
+        )
 }

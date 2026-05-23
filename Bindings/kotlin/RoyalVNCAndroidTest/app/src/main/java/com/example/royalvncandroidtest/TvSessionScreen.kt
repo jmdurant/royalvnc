@@ -41,6 +41,7 @@ fun TvSessionScreen(
     val cursorY by session.cursorY
 
     var showActions by remember { mutableStateOf(false) }
+    var showTextInput by remember { mutableStateOf(false) }
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
     val focusRequester = remember { FocusRequester() }
     val cursorSpeed = settings.cursorSpeed
@@ -72,7 +73,7 @@ fun TvSessionScreen(
             .focusRequester(focusRequester)
             .focusable()
             .onPreviewKeyEvent { keyEvent ->
-                if (showActions) return@onPreviewKeyEvent false
+                if (showActions || showTextInput) return@onPreviewKeyEvent false
 
                 if (keyEvent.type == KeyEventType.KeyDown) {
                     handleTvKeyDown(keyEvent, session, cursorSpeed, fbWidth, fbHeight, cursorX, cursorY) {
@@ -190,6 +191,11 @@ fun TvSessionScreen(
             title = { Text("Actions") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TvActionButton("Type Text…") {
+                        showActions = false
+                        showTextInput = true
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                     TvActionButton("Right Click") {
                         session.click(
                             VncMouseButton.RIGHT,
@@ -265,12 +271,77 @@ fun TvSessionScreen(
         )
     }
 
+    // Text input dialog — focusing the field brings up the Android TV
+    // on-screen keyboard so arbitrary text can be sent to the remote.
+    if (showTextInput) {
+        var inputText by remember { mutableStateOf("") }
+        val textFocusRequester = remember { FocusRequester() }
+
+        LaunchedEffect(Unit) {
+            try { textFocusRequester.requestFocus() } catch (_: Exception) {}
+        }
+
+        fun dismissTextInput() {
+            showTextInput = false
+            try { focusRequester.requestFocus() } catch (_: Exception) {}
+        }
+
+        AlertDialog(
+            onDismissRequest = { dismissTextInput() },
+            title = { Text("Type Text") },
+            text = {
+                Column {
+                    Text(
+                        "Enter text to send to the remote computer.",
+                        fontSize = 14.sp
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = inputText,
+                        onValueChange = { inputText = it },
+                        label = { Text("Text") },
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(textFocusRequester)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    inputText.forEach { sendCharAsKey(session, it) }
+                    dismissTextInput()
+                }) {
+                    Text("Send")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { dismissTextInput() }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     // Handle disconnection
     LaunchedEffect(isConnected) {
         if (!isConnected && framebuffer == null && statusText != "Connecting...") {
             onDisconnected()
         }
     }
+}
+
+private fun sendCharAsKey(session: VncSession, char: Char) {
+    // VNC uses X11 keysyms — printable ASCII (0x20–0x7E) maps directly to its
+    // keysym value; newline/tab map to their named keysyms, and anything else
+    // uses the Unicode-to-X11 keysym range. Mirrors SessionScreen's mapping.
+    val keysym = when {
+        char.code in 0x20..0x7E -> char.code
+        char == '\n' -> X11KeySymbol.XK_Return
+        char == '\t' -> X11KeySymbol.XK_Tab
+        else -> char.code or 0x01000000
+    }
+    session.sendKey(keysym)
 }
 
 private fun handleTvKeyDown(
