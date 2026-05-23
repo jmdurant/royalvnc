@@ -19,6 +19,14 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.RoyalVNCAndroidTest"
         tools:targetApi="31">
+
+        <!-- Declares that the app handles pointer/touch spatially, so pointer
+             remotes on Google TV interact directly instead of being emulated as
+             a D-pad. D-pad navigation remains fully supported. -->
+        <meta-data
+            android:name="android.software.leanback.supports_touch"
+            android:value="true" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

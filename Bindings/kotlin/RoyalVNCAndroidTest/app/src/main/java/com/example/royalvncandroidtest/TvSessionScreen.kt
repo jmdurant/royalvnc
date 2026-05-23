@@ -3,6 +3,7 @@ package com.example.royalvncandroidtest
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -13,8 +14,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
@@ -56,6 +60,15 @@ fun TvSessionScreen(
         (viewSize.height - displayHeight) / 2f
     } else 0f
 
+    // Maps a pointer position (px, in the Box's coordinate space) to remote
+    // framebuffer coordinates, mirroring the cursor overlay's transform.
+    fun offsetToVnc(offset: Offset): Pair<Short, Short>? {
+        if (fbWidth <= 0 || fbHeight <= 0 || displayScale <= 0f) return null
+        val vx = (offset.x / displayScale).coerceIn(0f, (fbWidth - 1).toFloat())
+        val vy = ((offset.y - verticalOffset) / displayScale).coerceIn(0f, (fbHeight - 1).toFloat())
+        return vx.toInt().toShort() to vy.toInt().toShort()
+    }
+
     // Request focus on the main box for key events
     LaunchedEffect(framebuffer) {
         if (framebuffer != null) {
@@ -81,6 +94,44 @@ fun TvSessionScreen(
                     }
                 } else {
                     false
+                }
+            }
+            // Pointer-remote / touchscreen support (additive to D-pad): tap =
+            // left click, double-tap = double click, long-press = right click.
+            .pointerInput(fbWidth, fbHeight, viewSize) {
+                detectTapGestures(
+                    onTap = { offset ->
+                        offsetToVnc(offset)?.let { (x, y) ->
+                            session.click(VncMouseButton.LEFT, x, y)
+                        }
+                    },
+                    onDoubleTap = { offset ->
+                        offsetToVnc(offset)?.let { (x, y) ->
+                            session.click(VncMouseButton.LEFT, x, y)
+                            session.click(VncMouseButton.LEFT, x, y)
+                        }
+                    },
+                    onLongPress = { offset ->
+                        offsetToVnc(offset)?.let { (x, y) ->
+                            session.click(VncMouseButton.RIGHT, x, y)
+                        }
+                    }
+                )
+            }
+            // Hover-to-move: any pointer movement (with or without a button held)
+            // repositions the remote cursor, like a trackpad/air-mouse.
+            .pointerInput(fbWidth, fbHeight, viewSize) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        if (event.type == PointerEventType.Move) {
+                            event.changes.firstOrNull()?.position?.let { pos ->
+                                offsetToVnc(pos)?.let { (x, y) ->
+                                    session.mouseMove(x, y)
+                                }
+                            }
+                        }
+                    }
                 }
             }
     ) {
