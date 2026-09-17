@@ -98,3 +98,4 @@ WatchApp/*.xcodeproj/
 TVApp/*.xcodeproj/
 iOSApp/*.xcodeproj/
 .mcp.json
+build-artifacts/
