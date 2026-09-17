@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup Condition="!$([MSBuild]::IsOSPlatform('Windows'))">
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Library</OutputType>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Native arch">
+    <_NativeArch Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'ARM64'">aarch64</_NativeArch>
+    <_NativeArch Condition="'$(_NativeArch)' == ''">x86_64</_NativeArch>
+
+    <_NativeCfg Condition="'$(Configuration)' == 'Release'">release</_NativeCfg>
+    <_NativeCfg Condition="'$(_NativeCfg)' == ''">debug</_NativeCfg>
+
+    <_SwiftBuildDir>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)..\..\..\.build'))</_SwiftBuildDir>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Windows" Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <_NativeLibrary>$(_SwiftBuildDir)$(_NativeArch)-unknown-windows-msvc\$(_NativeCfg)\RoyalVNCKit.dll</_NativeLibrary>
+  </PropertyGroup>
+
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <None Include="$(_NativeLibrary)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <Link>%(Filename)%(Extension)</Link>
+    </None>
+    <None Include="$(_SwiftBuildDir)$(_NativeArch)-unknown-windows-msvc\$(_NativeCfg)\*.dll" Exclude="$(_NativeLibrary)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <Link>%(Filename)%(Extension)</Link>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RoyalApps.RoyalVNCKit\RoyalApps.RoyalVNCKit.csproj" />
+  </ItemGroup>
+
+</Project>

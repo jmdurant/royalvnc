@@ -1,0 +1,143 @@
+<Window x:Class="RoyalApps.RoyalVNCKit.WpfDemo.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="RoyalVNC — Windows Client"
+        Height="780" Width="1150"
+        MinHeight="500" MinWidth="750"
+        Background="{StaticResource WindowBg}"
+        WindowStartupLocation="CenterScreen">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Top Toolbar -->
+        <Border Grid.Row="0" Background="{StaticResource ToolbarBg}"
+                BorderBrush="{StaticResource BorderBrushColor}" BorderThickness="0,0,0,1"
+                Padding="12,10">
+            <DockPanel LastChildFill="True">
+                <!-- App Title -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,20,0">
+                    <TextBlock Text="👑" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center" />
+                    <TextBlock Text="RoyalVNC" FontWeight="Bold" FontSize="15"
+                               Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center" />
+                </StackPanel>
+
+                <!-- Connection Controls -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" DockPanel.Dock="Left">
+                    <TextBlock Text="Host:" Foreground="{StaticResource TextSecondary}"
+                               VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <TextBox x:Name="HostTextBox" Text="127.0.0.1" Width="170" Margin="0,0,12,0" />
+
+                    <TextBlock Text="Port:" Foreground="{StaticResource TextSecondary}"
+                               VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <TextBox x:Name="PortTextBox" Text="5900" Width="60" Margin="0,0,14,0" />
+
+                    <Button x:Name="ConnectButton" Content="Connect" Click="OnConnectClick" Width="95" Margin="0,0,10,0" />
+                    <Button x:Name="DisconnectButton" Content="Disconnect" Click="OnDisconnectClick"
+                            Width="95" Background="{StaticResource DangerColor}" Foreground="#FFFFFF"
+                            Visibility="Collapsed" Margin="0,0,10,0" />
+
+                    <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="6,0" Background="{StaticResource BorderBrushColor}" />
+
+                    <CheckBox x:Name="ScaleToFitCheckBox" Content="Scale to Fit" IsChecked="True"
+                              Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"
+                              Margin="6,0,12,0" Checked="OnScalingChanged" Unchecked="OnScalingChanged" />
+
+                    <Button x:Name="CadButton" Content="Ctrl+Alt+Del" Click="OnCadClick"
+                            Padding="8,5" Background="{StaticResource CardBg}" Foreground="{StaticResource TextPrimary}"
+                            BorderBrush="{StaticResource BorderBrushColor}" BorderThickness="1"
+                            ToolTip="Send Ctrl+Alt+Delete to remote session" IsEnabled="False" />
+                </StackPanel>
+
+                <!-- Status Indicator (Right aligned) -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
+                    <Ellipse x:Name="StatusDot" Width="10" Height="10" Fill="{StaticResource TextSecondary}"
+                             Margin="0,0,8,0" VerticalAlignment="Center" />
+                    <TextBlock x:Name="StatusLabel" Text="Disconnected" Foreground="{StaticResource TextSecondary}"
+                               FontSize="12" VerticalAlignment="Center" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Main Workspace Area -->
+        <Grid Grid.Row="1">
+            <!-- Disconnected / Empty State -->
+            <Grid x:Name="EmptyStatePanel" Visibility="Visible" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Border Background="{StaticResource CardBg}" BorderBrush="{StaticResource BorderBrushColor}"
+                        BorderThickness="1" CornerRadius="8" Padding="40" MaxWidth="500">
+                    <StackPanel HorizontalAlignment="Center">
+                        <TextBlock Text="👑" FontSize="48" HorizontalAlignment="Center" Margin="0,0,0,12" />
+                        <TextBlock Text="RoyalVNC Windows Client" FontWeight="Bold" FontSize="20"
+                                   Foreground="{StaticResource TextPrimary}" HorizontalAlignment="Center" Margin="0,0,0,8" />
+                        <TextBlock Text="Enter the IP address or hostname of your VNC / Apple Remote Desktop server above and click Connect."
+                                   Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" TextAlignment="Center"
+                                   LineHeight="20" Margin="0,0,0,16" />
+
+                        <!-- Error Banner (if any) -->
+                        <Border x:Name="ErrorBanner" Background="#3B2026" BorderBrush="{StaticResource DangerColor}"
+                                BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="0,10,0,0" Visibility="Collapsed">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="⚠️" Margin="0,0,8,0" VerticalAlignment="Center" />
+                                <TextBlock x:Name="ErrorMessageText" Foreground="{StaticResource DangerColor}"
+                                           TextWrapping="Wrap" VerticalAlignment="Center" FontSize="12" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- Connected Remote Screen Viewer -->
+            <ScrollViewer x:Name="ScreenScrollViewer" Visibility="Collapsed"
+                          HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                          Background="#000000" Focusable="False">
+                <Grid x:Name="ScreenContainer" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Image x:Name="ScreenImage" Stretch="Uniform"
+                           RenderOptions.BitmapScalingMode="HighQuality"
+                           Focusable="True" FocusVisualStyle="{x:Null}"
+                           MouseMove="OnScreenMouseMove"
+                           MouseDown="OnScreenMouseDown"
+                           MouseUp="OnScreenMouseUp"
+                           MouseWheel="OnScreenMouseWheel"
+                           KeyDown="OnScreenKeyDown"
+                           KeyUp="OnScreenKeyUp"
+                           TextInput="OnScreenTextInput" />
+                </Grid>
+            </ScrollViewer>
+
+            <!-- Authentication Modal Overlay -->
+            <Grid x:Name="AuthModalOverlay" Background="#99000000" Visibility="Collapsed">
+                <Border Background="{StaticResource CardBg}" BorderBrush="{StaticResource BorderBrushColor}"
+                        BorderThickness="1" CornerRadius="8" Padding="28" Width="380"
+                        HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <StackPanel>
+                        <TextBlock Text="🔒 Authentication Required" FontWeight="Bold" FontSize="16"
+                                   Foreground="{StaticResource TextPrimary}" Margin="0,0,0,6" />
+                        <TextBlock x:Name="AuthTypeLabel" Text="Please enter your VNC credentials"
+                                   Foreground="{StaticResource TextSecondary}" FontSize="12" Margin="0,0,0,18" />
+
+                        <!-- Username -->
+                        <StackPanel x:Name="UsernamePanel" Margin="0,0,0,14" Visibility="Collapsed">
+                            <TextBlock Text="Username:" Foreground="{StaticResource TextSecondary}" Margin="0,0,0,4" />
+                            <TextBox x:Name="AuthUsernameBox" />
+                        </StackPanel>
+
+                        <!-- Password -->
+                        <StackPanel x:Name="PasswordPanel" Margin="0,0,0,18">
+                            <TextBlock Text="Password:" Foreground="{StaticResource TextSecondary}" Margin="0,0,0,4" />
+                            <PasswordBox x:Name="AuthPasswordBox" KeyDown="OnAuthPasswordKeyDown" />
+                        </StackPanel>
+
+                        <!-- Action Buttons -->
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="Cancel" Click="OnAuthCancelClick" Background="Transparent"
+                                    Foreground="{StaticResource TextSecondary}" Margin="0,0,10,0" Padding="14,6" />
+                            <Button Content="Log In" Click="OnAuthSubmitClick" Width="90" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

@@ -13,5 +13,6 @@
     <File Path="RoyalApps.RoyalVNCKit.native/windows+linux.nuspec" />
   </Folder>
   <Project Path="RoyalApps.RoyalVNCKit.Demo/RoyalApps.RoyalVNCKit.Demo.csproj" />
+  <Project Path="RoyalApps.RoyalVNCKit.WpfDemo/RoyalApps.RoyalVNCKit.WpfDemo.csproj" />
   <Project Path="RoyalApps.RoyalVNCKit/RoyalApps.RoyalVNCKit.csproj" />
 </Solution>
