@@ -8,6 +8,6 @@ echo "Installing Skip using homebrew"
 brew install skiptools/skip/skip
 
 echo "Installing Skip Android SDK"
-skip android sdk install
+skip android sdk install 6.2.3
 
 echo "All Done"
