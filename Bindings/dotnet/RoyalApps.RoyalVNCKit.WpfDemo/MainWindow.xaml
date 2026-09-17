@@ -5,7 +5,8 @@
         Height="780" Width="1150"
         MinHeight="500" MinWidth="750"
         Background="{StaticResource WindowBg}"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterScreen"
+        ShowInTaskbar="True">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />

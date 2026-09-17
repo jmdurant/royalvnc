@@ -31,6 +31,27 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+
+        try
+        {
+            var iconPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "RoyalApps_1024.png");
+            if (System.IO.File.Exists(iconPath))
+            {
+                Icon = System.Windows.Media.Imaging.BitmapFrame.Create(new Uri(iconPath));
+            }
+        }
+        catch
+        {
+            // Ignore icon loading failures
+        }
+
+        Loaded += (s, e) =>
+        {
+            Topmost = true;
+            Topmost = false;
+            Activate();
+            Focus();
+        };
     }
 
     protected override void OnClosed(EventArgs e)
