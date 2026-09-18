@@ -28,6 +28,8 @@ public partial class MainWindow : Window
     AuthenticationRequest? _activeAuthRequest;
     bool _authResult;
 
+    CancellationTokenSource? _connectionTimeoutCts;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -81,7 +83,35 @@ public partial class MainWindow : Window
         HideError();
 
         UpdateStatus("Connecting...", isConnected: false, isConnecting: true);
-        ConnectButton.IsEnabled = false;
+        ConnectButton.Visibility = Visibility.Collapsed;
+        DisconnectButton.Content = "Cancel";
+        DisconnectButton.Visibility = Visibility.Visible;
+
+        var cts = new CancellationTokenSource();
+        _connectionTimeoutCts = cts;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(12000, cts.Token);
+                if (!cts.IsCancellationRequested)
+                {
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        if (_connection != null)
+                        {
+                            string hint = port == 3389
+                                ? " Note: Port 3389 is Microsoft Remote Desktop (RDP). RoyalVNC is a VNC/Apple Remote Desktop client (typically port 5900). If connecting to a Windows machine, make sure a VNC server (like UltraVNC, TightVNC, or TigerVNC) is running."
+                                : " Ensure a VNC server is running on the remote host and accessible on this port.";
+                            ShowError($"Connection to {host}:{port} timed out.{hint}");
+                            OnDisconnectClick(this, new RoutedEventArgs());
+                        }
+                    });
+                }
+            }
+            catch (OperationCanceledException) { }
+        });
 
         try
         {
@@ -116,20 +146,25 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            _connectionTimeoutCts?.Cancel();
             ShowError($"Failed to initiate connection: {ex.Message}");
             UpdateStatus("Connection failed", isConnected: false);
+            ConnectButton.Visibility = Visibility.Visible;
             ConnectButton.IsEnabled = true;
+            DisconnectButton.Visibility = Visibility.Collapsed;
         }
     }
 
     void OnDisconnectClick(object sender, RoutedEventArgs e)
     {
+        _connectionTimeoutCts?.Cancel();
         UpdateStatus("Disconnecting...", isConnected: false);
         _connection?.Disconnect();
     }
 
     void TeardownConnection()
     {
+        _connectionTimeoutCts?.Cancel();
         _authSignal?.Set();
         _connection?.Dispose();
         _connection = null;
@@ -155,10 +190,12 @@ public partial class MainWindow : Window
                     break;
 
                 case ConnectionStatus.Connected:
+                    _connectionTimeoutCts?.Cancel();
                     UpdateStatus("Connected", isConnected: true);
                     EmptyStatePanel.Visibility = Visibility.Collapsed;
                     ScreenScrollViewer.Visibility = Visibility.Visible;
                     ConnectButton.Visibility = Visibility.Collapsed;
+                    DisconnectButton.Content = "Disconnect";
                     DisconnectButton.Visibility = Visibility.Visible;
                     CadButton.IsEnabled = true;
                     ScreenImage.Focus();
@@ -169,11 +206,13 @@ public partial class MainWindow : Window
                     break;
 
                 case ConnectionStatus.Disconnected:
+                    _connectionTimeoutCts?.Cancel();
                     UpdateStatus("Disconnected", isConnected: false);
                     EmptyStatePanel.Visibility = Visibility.Visible;
                     ScreenScrollViewer.Visibility = Visibility.Collapsed;
                     ConnectButton.Visibility = Visibility.Visible;
                     ConnectButton.IsEnabled = true;
+                    DisconnectButton.Content = "Disconnect";
                     DisconnectButton.Visibility = Visibility.Collapsed;
                     CadButton.IsEnabled = false;
 
