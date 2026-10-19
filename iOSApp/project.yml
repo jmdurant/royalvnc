@@ -26,10 +26,10 @@ targets:
         product: RoyalVNCClientCore
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.royalapps.royalvnc.ios
+        PRODUCT_BUNDLE_IDENTIFIER: com.doctordurant.desktopondemand
         PRODUCT_NAME: RoyalVNC
         INFOPLIST_FILE: Info.plist
         SWIFT_VERSION: "5.0"
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: ""
+        DEVELOPMENT_TEAM: ADVQS8RXPZ
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

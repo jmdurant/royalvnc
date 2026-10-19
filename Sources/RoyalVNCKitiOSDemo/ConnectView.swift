@@ -76,7 +76,7 @@ struct ConnectView: View {
                     }
                 }
             }
-            .navigationTitle("RoyalVNC")
+            .navigationTitle("DesktopOnDemand")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     NavigationLink {

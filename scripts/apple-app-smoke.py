@@ -15,7 +15,7 @@ import time
 
 ROOT = Path(__file__).resolve().parent.parent
 PLATFORMS = {
-    'ios': ('iOSApp', 'RoyalVNCiOS', 'iphonesimulator', 'iOS', 'com.royalapps.royalvnc.ios'),
+    'ios': ('iOSApp', 'RoyalVNCiOS', 'iphonesimulator', 'iOS', 'com.doctordurant.desktopondemand'),
     'tvos': ('TVApp', 'RoyalVNCTV', 'appletvsimulator', 'tvOS', 'com.royalapps.royalvnc.tv'),
     'watchos': ('WatchApp', 'RoyalVNCWatch', 'watchsimulator', 'watchOS', 'com.royalapps.royalvnc.watch'),
 }
