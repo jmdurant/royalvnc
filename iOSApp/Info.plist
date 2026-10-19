@@ -43,32 +43,6 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>This app may use Bluetooth for device connectivity.</string>
-	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>This app may use Bluetooth peripherals.</string>
-	<key>NSCalendarsUsageDescription</key>
-	<string>This app may access your calendar.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>This app may use the camera.</string>
-	<key>NSContactsUsageDescription</key>
-	<string>This app may access your contacts.</string>
-	<key>NSFaceIDUsageDescription</key>
-	<string>This app may use Face ID for authentication.</string>
-	<key>NSHealthShareUsageDescription</key>
-	<string>This app may read your health data.</string>
-	<key>NSHealthUpdateUsageDescription</key>
-	<string>This app may write health data.</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>This app may use your location.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>This app may use the microphone.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>This app may access your photo library.</string>
-	<key>NSSiriUsageDescription</key>
-	<string>This app may use Siri and shortcuts.</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>This app may use speech recognition.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 </dict>
