@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
-set -e
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$REPO_DIR/scripts/android-toolchain.sh"
 
-export HOMEBREW_NO_REQUIRE_TAP_TRUST=1
-
-echo "Installing Skip using homebrew"
+echo "Installing Skip using Homebrew"
 brew install skiptools/skip/skip
 
-echo "Installing Skip Android SDK"
-skip android sdk install 6.2.3
+echo "Installing Swift Android SDK $SWIFT_ANDROID_VERSION"
+SWIFT_ANDROID_SDK_HOME="$(dirname "$(dirname "$SWIFT_ANDROID_ROOT")")"
+mkdir -p "$SWIFT_ANDROID_SDK_HOME"
+SWIFT_ANDROID_SDK_HOME="$(cd "$SWIFT_ANDROID_SDK_HOME" && pwd -P)"
+skip android sdk install --version "$SWIFT_ANDROID_VERSION" --swift-sdk-home "$SWIFT_ANDROID_SDK_HOME"
 
 echo "All Done"

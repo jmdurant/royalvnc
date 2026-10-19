@@ -34,14 +34,15 @@ class VncSession(
     private var connection: VncConnection? = null
     private var pixelBuffer: VncPixelBuffer? = null
     private var pendingAuthRequest: VncAuthenticationRequest? = null
-    private var savedUsername: String = ""
-    private var savedPassword: String = ""
+    private var closed = false
+    private val credentials = SessionCredentials(
+        save = { username, password -> credentialStore.saveCredentials(hostname, port, username, password) },
+        delete = { credentialStore.deleteCredentials(hostname, port) }
+    )
 
     fun connect() {
-        credentialStore.loadCredentials(hostname, port)?.let { (user, pass) ->
-            savedUsername = user
-            savedPassword = pass
-        }
+        check(!closed) { "Session is closed" }
+        credentials.load(credentialStore.loadCredentials(hostname, port))
 
         val encodings = settings.frameEncodings.toTypedArray()
 
@@ -68,28 +69,27 @@ class VncSession(
     }
 
     fun disconnect() {
+        cancelAuthentication()
         connection?.disconnect()
     }
 
     fun submitCredentials(username: String, password: String) {
-        savedUsername = username
-        savedPassword = password
-        credentialStore.saveCredentials(hostname, port, username, password)
-
-        pendingAuthRequest?.let { request ->
-            if (request.requiresUsername) {
-                request.completeWithUsernameAndPassword(username, password)
-            } else {
-                request.completeWithPassword(password)
-            }
-        }
+        val request = pendingAuthRequest ?: return
         pendingAuthRequest = null
         showCredentialPrompt.value = false
+        credentials.submit(username, password)
+        if (request.requiresUsername) {
+            request.completeWithUsernameAndPassword(username, password)
+        } else {
+            request.completeWithPassword(password)
+        }
     }
 
     fun cancelAuthentication() {
-        pendingAuthRequest?.cancel()
+        val request = pendingAuthRequest
         pendingAuthRequest = null
+        request?.cancel()
+        credentials.clear()
         showCredentialPrompt.value = false
     }
 
@@ -127,6 +127,9 @@ class VncSession(
     }
 
     fun close() {
+        if (closed) return
+        closed = true
+        cancelAuthentication()
         connection?.setDelegate(null)
         connection?.close()
         connection = null
@@ -153,14 +156,17 @@ class VncSession(
         val status = connectionState.status
         val errorDescription = connectionState.errorDescription
         val shouldDisplay = connectionState.shouldDisplayToUser
+        val authenticationError = connectionState.isAuthenticationError
 
         mainHandler.post {
+            if (closed || this.connection !== connection) return@post
             when (status) {
                 VncConnectionStatus.CONNECTING -> {
                     isConnected.value = true
                     statusText.value = "Connecting..."
                 }
                 VncConnectionStatus.CONNECTED -> {
+                    credentials.connected()
                     isConnected.value = true
                     statusText.value = "Connected"
                 }
@@ -168,6 +174,8 @@ class VncSession(
                     statusText.value = "Disconnecting..."
                 }
                 VncConnectionStatus.DISCONNECTED -> {
+                    if (authenticationError) credentials.rejected()
+                    cancelAuthentication()
                     isConnected.value = false
                     framebufferImage.value = null
                     cursorImage.value = null
@@ -187,19 +195,24 @@ class VncSession(
         connection: VncConnection,
         authenticationRequest: VncAuthenticationRequest
     ) {
-        if (savedUsername.isNotEmpty() || savedPassword.isNotEmpty()) {
-            if (authenticationRequest.requiresUsername) {
-                authenticationRequest.completeWithUsernameAndPassword(savedUsername, savedPassword)
-            } else {
-                authenticationRequest.completeWithPassword(savedPassword)
+        mainHandler.post {
+            if (closed || this.connection !== connection) {
+                authenticationRequest.cancel()
+                return@post
             }
-            savedUsername = ""
-            savedPassword = ""
-        } else {
+            credentials.takeSaved()?.let { (username, password) ->
+                if (authenticationRequest.requiresUsername) {
+                    authenticationRequest.completeWithUsernameAndPassword(username, password)
+                } else {
+                    authenticationRequest.completeWithPassword(password)
+                }
+                return@post
+            }
+            // A repeated challenge must allow correction rather than replaying a rejected pair.
+            credentials.rejected()
+            pendingAuthRequest?.cancel()
             pendingAuthRequest = authenticationRequest
-            mainHandler.post {
-                showCredentialPrompt.value = true
-            }
+            showCredentialPrompt.value = true
         }
     }
 

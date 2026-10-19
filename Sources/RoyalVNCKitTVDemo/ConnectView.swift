@@ -1,4 +1,5 @@
 #if os(tvOS)
+import RoyalVNCClientCore
 import SwiftUI
 import RoyalVNCKit
 
@@ -161,8 +162,8 @@ struct CreateConnectionView: View {
                             port: portValue
                         )
                         ProfileStore.add(profile)
-                        if !password.isEmpty {
-                            CredentialStore.save(host: hostname, port: portValue, username: username, password: password)
+                        if !username.isEmpty || !password.isEmpty {
+                            CredentialStore.stage(host: hostname, port: portValue, username: username, password: password)
                         }
                         onSaved()
                         dismiss()
@@ -170,8 +171,8 @@ struct CreateConnectionView: View {
                     .disabled(hostname.isEmpty)
 
                     Button("Connect") {
-                        if !password.isEmpty {
-                            CredentialStore.save(host: hostname, port: portValue, username: username, password: password)
+                        if !username.isEmpty || !password.isEmpty {
+                            CredentialStore.stage(host: hostname, port: portValue, username: username, password: password)
                         }
                         onConnect(hostname, portValue)
                     }

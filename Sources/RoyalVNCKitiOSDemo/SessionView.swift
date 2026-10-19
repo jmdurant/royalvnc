@@ -1,4 +1,5 @@
 #if os(iOS)
+import RoyalVNCClientCore
 import SwiftUI
 import RoyalVNCKit
 

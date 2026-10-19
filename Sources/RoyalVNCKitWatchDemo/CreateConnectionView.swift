@@ -1,4 +1,5 @@
 #if os(watchOS)
+import RoyalVNCClientCore
 import SwiftUI
 
 struct CreateConnectionView: View {
@@ -51,6 +52,11 @@ struct CreateConnectionView: View {
                     Text("Connect")
                 }
                 .disabled(hostname.isEmpty)
+                .simultaneousGesture(TapGesture().onEnded {
+                    if !username.isEmpty || !password.isEmpty {
+                        CredentialStore.stage(host: hostname, port: portValue, username: username, password: password)
+                    }
+                })
             }
         }
         .navigationTitle("New Connection")
@@ -69,9 +75,9 @@ struct CreateConnectionView: View {
         )
         ProfileStore.add(profile)
 
-        // Save credentials if provided
-        if !password.isEmpty {
-            CredentialStore.save(
+        // Keep credentials in memory until authentication succeeds
+        if !username.isEmpty || !password.isEmpty {
+            CredentialStore.stage(
                 host: hostname,
                 port: portValue,
                 username: username,

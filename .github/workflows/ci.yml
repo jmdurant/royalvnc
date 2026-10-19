@@ -1,7 +1,8 @@
 name: CI
 
 on:
-  push: # trigger on commits to the `main` branch (no PRs)
+  pull_request:
+  push: # trigger on commits to the main branch
     branches:
       - main
     paths-ignore:
@@ -109,7 +110,7 @@ jobs:
     - name: build RoyalVNCKit (Apple)
       if: "success() && matrix.env.OS == 'apple'"
       run: |
-        swift package clean --configuration release
+        swift package clean
 
         swift build --configuration release --arch arm64
         swift build --configuration release --arch x86_64
@@ -124,8 +125,11 @@ jobs:
     - name: build RoyalVNCKit
       if: "success() && matrix.env.OS != 'apple'"
       run: |
-        swift package clean --configuration release
+        swift package clean
         swift build --configuration release
+
+    - name: run Swift regression tests
+      run: swift test --configuration debug
 
     # .NET bindings and NuGet package artifacts
 
@@ -181,6 +185,13 @@ jobs:
     
     # Kotlin bindings and Android AAR artifacts
 
+    - name: setup Java for Android
+      if: "success() && matrix.env.OS == 'apple'"
+      uses: actions/setup-java@v5
+      with:
+        distribution: temurin
+        java-version: '21'
+
     - name: install Android dependencies
       if: "success() && matrix.env.OS == 'apple'"
       run: |
@@ -190,6 +201,15 @@ jobs:
       if: "success() && matrix.env.OS == 'apple'"
       run: |
         ./android_build.sh
+
+    - name: build and test Android application
+      if: "success() && matrix.env.OS == 'apple'"
+      working-directory: Bindings/kotlin/RoyalVNCAndroidTest
+      run: ./gradlew :app:assembleDebug :app:testDebugUnitTest
+
+    - name: verify Android application package
+      if: "success() && matrix.env.OS == 'apple'"
+      run: python3 scripts/android-package-smoke.py
 
     - name: publish Android artifacts
       if: "success() && matrix.env.OS == 'apple'"
@@ -201,3 +221,79 @@ jobs:
         path: |
           Bindings/kotlin/RoyalVNCAndroidTest/royalvnc/build/distributions/royalvnc.zip
           Bindings/kotlin/RoyalVNCAndroidTest/swiftRuntime/build/distributions/swiftRuntime_android.zip
+          Bindings/kotlin/RoyalVNCAndroidTest/app/build/outputs/apk/debug/*.apk
+          Bindings/kotlin/RoyalVNCAndroidTest/app/build/reports/tests/testDebugUnitTest/
+
+  apple-apps:
+    name: "Apple app - ${{ matrix.platform }}"
+    runs-on: macos-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ios
+            runtime: iOS
+          - platform: tvos
+            runtime: tvOS
+          - platform: watchos
+            runtime: watchOS
+    steps:
+      - uses: actions/checkout@v6
+      - name: install project generator
+        run: brew list xcodegen || brew install xcodegen
+      - name: prepare simulator runtime
+        run: xcodebuild -downloadPlatform "${{ matrix.runtime }}"
+      - name: build, verify package, and launch
+        run: python3 scripts/apple-app-smoke.py "${{ matrix.platform }}"
+      - name: publish app smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: apple-smoke-${{ matrix.platform }}
+          retention-days: 5
+          if-no-files-found: warn
+          path: |
+            .build/apple-smoke/${{ matrix.platform }}/build.log
+            .build/apple-smoke/${{ matrix.platform }}/launch.png
+            .build/apple-smoke/${{ matrix.platform }}/RoyalVNC-simulator.zip
+
+  android-credentials:
+    name: Android Keystore instrumentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+      - name: enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      # Hosted arm64 macOS runners cannot virtualize an Android emulator.
+      # Run Keystore tests on x86_64 here; NativeLibrarySmokeTest requires
+      # the arm64 native APK and a local arm64 emulator or physical device.
+      - name: run real Android Keystore tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          working-directory: Bindings/kotlin/RoyalVNCAndroidTest
+          script: ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.example.royalvncandroidtest.CredentialStoreTest
+      - name: publish Android instrumentation results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: android-credential-instrumentation
+          retention-days: 5
+          if-no-files-found: warn
+          path: |
+            Bindings/kotlin/RoyalVNCAndroidTest/app/build/reports/androidTests/
+            Bindings/kotlin/RoyalVNCAndroidTest/app/build/outputs/androidTest-results/

@@ -44,6 +44,8 @@ let package = Package(
             targets: [ "RoyalVNCKit" ]
         ),
 
+        .library(name: "RoyalVNCClientCore", targets: [ "RoyalVNCClientCore" ]),
+
         .executable(name: "RoyalVNCKitDemo",
                     targets: [ "RoyalVNCKitDemo" ])
     ],
@@ -81,6 +83,16 @@ let package = Package(
             ]
         ),
 
+        .target(
+            name: "RoyalVNCClientCore",
+            dependencies: [ "RoyalVNCKit" ],
+            swiftSettings: [ .swiftLanguageMode(swiftLanguageMode) ]
+        ),
+        .testTarget(name: "RoyalVNCKitTests", dependencies: [ "RoyalVNCKit" ],
+                    swiftSettings: [ .swiftLanguageMode(swiftLanguageMode) ]),
+        .testTarget(name: "RoyalVNCClientCoreTests", dependencies: [ "RoyalVNCClientCore" ],
+                    swiftSettings: [ .swiftLanguageMode(swiftLanguageMode) ]),
+
         d3desTarget,
         zTarget,
 
@@ -96,7 +108,7 @@ let package = Package(
 
         .executableTarget(
             name: "RoyalVNCKitWatchDemo",
-            dependencies: [ "RoyalVNCKit" ],
+            dependencies: [ "RoyalVNCKit", "RoyalVNCClientCore" ],
             swiftSettings: [
                 .swiftLanguageMode(swiftLanguageMode)
             ]
@@ -104,7 +116,7 @@ let package = Package(
 
         .executableTarget(
             name: "RoyalVNCKitTVDemo",
-            dependencies: [ "RoyalVNCKit" ],
+            dependencies: [ "RoyalVNCKit", "RoyalVNCClientCore" ],
             swiftSettings: [
                 .swiftLanguageMode(swiftLanguageMode)
             ]
@@ -112,7 +124,7 @@ let package = Package(
 
         .executableTarget(
             name: "RoyalVNCKitiOSDemo",
-            dependencies: [ "RoyalVNCKit" ],
+            dependencies: [ "RoyalVNCKit", "RoyalVNCClientCore" ],
             swiftSettings: [
                 .swiftLanguageMode(swiftLanguageMode)
             ]

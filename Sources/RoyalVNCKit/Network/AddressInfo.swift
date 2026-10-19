@@ -32,7 +32,8 @@ final class AddressInfo: @unchecked Sendable {
 #endif
 
         var hints = addrinfo()
-        hints.ai_flags = AI_PASSIVE
+        // This is a client lookup; AI_PASSIVE is intended for listening sockets.
+        hints.ai_flags = 0
         hints.ai_family = AF_INET
         hints.ai_socktype = socktype
 

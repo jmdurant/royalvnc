@@ -1,4 +1,5 @@
 #if os(iOS)
+import RoyalVNCClientCore
 import SwiftUI
 import RoyalVNCKit
 
@@ -153,6 +154,11 @@ struct CreateConnectionView: View {
                     Text("Connect")
                 }
                 .disabled(hostname.isEmpty)
+                .simultaneousGesture(TapGesture().onEnded {
+                    if !username.isEmpty || !password.isEmpty {
+                        CredentialStore.stage(host: hostname, port: portValue, username: username, password: password)
+                    }
+                })
             }
         }
         .navigationTitle("New Connection")
@@ -166,8 +172,8 @@ struct CreateConnectionView: View {
         )
         ProfileStore.add(profile)
 
-        if !password.isEmpty {
-            CredentialStore.save(host: hostname, port: portValue, username: username, password: password)
+        if !username.isEmpty || !password.isEmpty {
+            CredentialStore.stage(host: hostname, port: portValue, username: username, password: password)
         }
 
         onSaved()

@@ -3,6 +3,7 @@ import FoundationEssentials
 #else
 import Foundation
 #endif
+import Dispatch
 
 #if canImport(Glibc)
 import Glibc
@@ -14,168 +15,225 @@ import Darwin
 import Android
 #endif
 
-final class Socket: Sendable {
+/// The descriptor stays open until the last operation releases this object. Cancellation
+/// shuts it down, avoiding descriptor reuse races with an operation already in progress.
+final class Socket: @unchecked Sendable {
     let addressInfo: AddressInfo
-
-#if canImport(Glibc) || canImport(Darwin) || canImport(Android)
-    private typealias NativeSocket = Int32
-#elseif canImport(WinSDK)
+#if canImport(WinSDK)
     private typealias NativeSocket = SOCKET
+#else
+    private typealias NativeSocket = Int32
 #endif
-
     private let nativeSocket: NativeSocket
+#if canImport(Glibc) || canImport(Android) || canImport(WinSDK)
+    private let lock = Spinlock()
+#else
+    private let lock = NSLock()
+#endif
+    private var cancelled = false
 
     init(addressInfo: AddressInfo) throws(Errors) {
-        let nativeSocket = socket(
-            addressInfo.family,
-            addressInfo.socktype,
-            addressInfo.protocol
-        )
-
-#if canImport(Glibc) || canImport(Darwin) || canImport(Android)
-        guard nativeSocket >= 0 else {
-            throw .socketCreationFailed(underlyingErrorCode: nil)
+        // Keep ownership local until configuration has succeeded. A fully initialized
+        // class runs deinit when its initializer throws, so assigning the stored
+        // descriptor before configuration could otherwise close a failed socket twice.
+        let descriptor = socket(addressInfo.family, addressInfo.socktype, addressInfo.protocol)
+#if canImport(WinSDK)
+        guard descriptor != INVALID_SOCKET else {
+            throw .socketCreationFailed(underlyingErrorCode: WSAGetLastError())
         }
-#elseif canImport(WinSDK)
-        guard nativeSocket != INVALID_SOCKET else {
-            let lastError = WSAGetLastError()
-
-            throw .socketCreationFailed(underlyingErrorCode: lastError)
+#else
+        guard descriptor >= 0 else {
+            throw .socketCreationFailed(underlyingErrorCode: errno)
         }
 #endif
-
+        var ownsDescriptor = true
+        defer {
+            if ownsDescriptor {
+#if canImport(WinSDK)
+                closesocket(descriptor)
+#else
+                close(descriptor)
+#endif
+            }
+        }
+#if canImport(WinSDK)
+        var nonblocking: u_long = 1
+        guard ioctlsocket(descriptor, FIONBIO, &nonblocking) == 0 else {
+            throw .socketCreationFailed(underlyingErrorCode: WSAGetLastError())
+        }
+#else
+        let flags = fcntl(descriptor, F_GETFL, 0)
+        guard flags >= 0, fcntl(descriptor, F_SETFL, flags | O_NONBLOCK) >= 0 else {
+            throw .socketCreationFailed(underlyingErrorCode: errno)
+        }
+#if canImport(Darwin)
+        var noSigPipe: Int32 = 1
+        guard setsockopt(descriptor, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe,
+                         socklen_t(MemoryLayout<Int32>.size)) == 0 else {
+            throw .socketCreationFailed(underlyingErrorCode: errno)
+        }
+#endif
+#endif
         self.addressInfo = addressInfo
-        self.nativeSocket = nativeSocket
+        self.nativeSocket = descriptor
+        ownsDescriptor = false
     }
 
-    func connect() throws(Errors) {
-        let connectResult: Int32
-
-#if canImport(Glibc)
-        connectResult = Glibc.connect(
-            nativeSocket,
-            addressInfo.addr,
-            addressInfo.addrlen
-        )
-#elseif canImport(Android)
-        connectResult = Android.connect(
-            nativeSocket,
-            addressInfo.addr!, // TODO: Get rid of force unwrap
-            addressInfo.addrlen
-        )
-#elseif canImport(Darwin)
-        connectResult = Darwin.connect(
-            nativeSocket,
-            addressInfo.addr,
-            addressInfo.addrlen
-        )
-#elseif canImport(WinSDK)
-        connectResult = WinSDK.connect(
-            nativeSocket,
-            addressInfo.addr,
-            .init(addressInfo.addrlen)
-        )
+    func cancel() {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !cancelled else { return }
+        cancelled = true
+#if canImport(WinSDK)
+        _ = shutdown(nativeSocket, SD_BOTH)
+#else
+        _ = shutdown(nativeSocket, Int32(SHUT_RDWR))
 #endif
-
-        guard connectResult >= 0 else {
-            throw .connectFailed(underlyingErrorCode: connectResult)
-        }
     }
 
-    func receive(buffer: inout [UInt8]) -> Int {
-        let bufferSize = buffer.count
-
-        let bytesRead: Int = buffer.withUnsafeMutableBytes { bufferPtr in
-            guard let bufferPtrAddr = bufferPtr.baseAddress else {
-                return 0
-            }
-
-            let ret = recv(
-                nativeSocket,
-                bufferPtrAddr,
-                .init(bufferSize),
-                0
-            )
-
-            return .init(ret)
-        }
-
-        return bytesRead
+    private func checkCancellation() throws(Errors) {
+        lock.lock()
+        let value = cancelled
+        lock.unlock()
+        if value { throw .cancelled }
     }
 
-    func send(buffer: [UInt8]) -> Int {
-        let bufferCount = buffer.count
-
-        let bytesSent: Int = buffer.withUnsafeBytes { bufferPtr in
-            guard let bufferPtrAddr = bufferPtr.baseAddress else {
-                return -1
-            }
-
-#if canImport(Glibc)
-            let ret = Glibc.send(
-                nativeSocket,
-                bufferPtrAddr,
-                .init(bufferCount),
-                0
-            )
-#elseif canImport(Android)
-            let ret = Android.send(
-                nativeSocket,
-                bufferPtrAddr,
-                .init(bufferCount),
-                0
-            )
-#elseif canImport(Darwin)
-            let ret = Darwin.send(
-                nativeSocket,
-                bufferPtrAddr,
-                .init(bufferCount),
-                0
-            )
-#elseif canImport(WinSDK)
-            let ret = WinSDK.send(
-                nativeSocket,
-                bufferPtrAddr,
-                .init(bufferCount),
-                0
-            )
+    private var lastError: Int32 {
+#if canImport(WinSDK)
+        WSAGetLastError()
+#else
+        errno
 #endif
+    }
 
-            return .init(ret)
+    private func isRetryable(_ code: Int32) -> Bool {
+#if canImport(WinSDK)
+        code == WSAEWOULDBLOCK || code == WSAEINTR || code == WSAEINPROGRESS
+#else
+        code == EAGAIN || code == EWOULDBLOCK || code == EINTR || code == EINPROGRESS
+#endif
+    }
+
+    /// Poll in bounded intervals so cancellation works even for a pending connect.
+    private func wait(writing: Bool, deadline: DispatchTime? = nil) throws(Errors) {
+        while true {
+            try checkCancellation()
+            var milliseconds: Int32 = 50
+            if let deadline {
+                let now = DispatchTime.now().uptimeNanoseconds
+                guard now < deadline.uptimeNanoseconds else { throw .timedOut }
+                milliseconds = Int32(min(50, max(1, (deadline.uptimeNanoseconds - now) / 1_000_000)))
+            }
+#if canImport(WinSDK)
+            var descriptor = WSAPOLLFD(fd: nativeSocket,
+                                       events: Int16(writing ? POLLWRNORM : POLLRDNORM), revents: 0)
+            let result = WSAPoll(&descriptor, 1, milliseconds)
+#else
+            var descriptor = pollfd(fd: nativeSocket, events: Int16(writing ? POLLOUT : POLLIN), revents: 0)
+            let result = poll(&descriptor, 1, milliseconds)
+#endif
+            try checkCancellation()
+            if result > 0 { return }
+            if result < 0, !isRetryable(lastError) { throw .operationFailed(underlyingErrorCode: lastError) }
         }
+    }
 
-        return bytesSent
+    func connect(deadline: DispatchTime? = nil) throws(Errors) {
+        try checkCancellation()
+        if let deadline, DispatchTime.now().uptimeNanoseconds >= deadline.uptimeNanoseconds {
+            throw .timedOut
+        }
+        let result: Int32
+#if canImport(Glibc)
+        result = Glibc.connect(nativeSocket, addressInfo.addr, addressInfo.addrlen)
+#elseif canImport(Android)
+        result = Android.connect(nativeSocket, addressInfo.addr!, addressInfo.addrlen)
+#elseif canImport(Darwin)
+        result = Darwin.connect(nativeSocket, addressInfo.addr, addressInfo.addrlen)
+#elseif canImport(WinSDK)
+        result = WinSDK.connect(nativeSocket, addressInfo.addr, Int32(addressInfo.addrlen))
+#endif
+        if result < 0 {
+            let code = lastError
+            guard isRetryable(code) else { throw .connectFailed(underlyingErrorCode: code) }
+            try wait(writing: true, deadline: deadline)
+            var error: Int32 = 0
+#if canImport(WinSDK)
+            var length = Int32(MemoryLayout<Int32>.size)
+            let optionResult = withUnsafeMutablePointer(to: &error) {
+                $0.withMemoryRebound(to: CChar.self, capacity: MemoryLayout<Int32>.size) {
+                    getsockopt(nativeSocket, SOL_SOCKET, SO_ERROR, $0, &length)
+                }
+            }
+#else
+            var length = socklen_t(MemoryLayout<Int32>.size)
+            let optionResult = getsockopt(nativeSocket, SOL_SOCKET, SO_ERROR, &error, &length)
+#endif
+            guard optionResult == 0 else { throw .connectFailed(underlyingErrorCode: lastError) }
+            guard error == 0 else { throw .connectFailed(underlyingErrorCode: error) }
+        }
+        try checkCancellation()
+    }
+
+    func receive(buffer: inout [UInt8]) throws(Errors) -> Int {
+        while true {
+            try wait(writing: false)
+            let count = buffer.withUnsafeMutableBytes { bytes in
+                Int(recv(nativeSocket, bytes.baseAddress!.assumingMemoryBound(to: CChar.self), .init(bytes.count), 0))
+            }
+            if count >= 0 { return count }
+            let code = lastError
+            if !isRetryable(code) { throw .operationFailed(underlyingErrorCode: code) }
+        }
+    }
+
+    func sendAll(buffer: [UInt8]) throws(Errors) {
+        var offset = 0
+        while offset < buffer.count {
+            try wait(writing: true)
+            let count = buffer.withUnsafeBytes { bytes -> Int in
+#if canImport(Glibc) || canImport(Android)
+                let flags = Int32(MSG_NOSIGNAL)
+#else
+                let flags: Int32 = 0
+#endif
+                return Int(send(nativeSocket, bytes.baseAddress!.advanced(by: offset).assumingMemoryBound(to: CChar.self),
+                                .init(min(bytes.count - offset, Int(Int32.max))), flags))
+            }
+            if count > 0 { offset += count; continue }
+            if count == 0 { throw .connectionClosed }
+            let code = lastError
+            if !isRetryable(code) { throw .operationFailed(underlyingErrorCode: code) }
+        }
+        try checkCancellation()
     }
 
     deinit {
-#if canImport(Glibc) || canImport(Darwin) || canImport(Android)
-        close(nativeSocket)
-#elseif canImport(WinSDK)
+#if canImport(WinSDK)
         closesocket(nativeSocket)
+#else
+        close(nativeSocket)
 #endif
     }
 }
 
-// MARK: - Errors
 extension Socket {
     enum Errors: LocalizedError {
         case socketCreationFailed(underlyingErrorCode: Int32?)
         case connectFailed(underlyingErrorCode: Int32)
+        case operationFailed(underlyingErrorCode: Int32)
+        case cancelled
+        case timedOut
+        case connectionClosed
 
         var errorDescription: String? {
             switch self {
-                case .socketCreationFailed(let underlyingErrorCode):
-                    let underlyingErrorCodeStr: String
-
-                    if let underlyingErrorCode {
-                        underlyingErrorCodeStr = "\(underlyingErrorCode)"
-                    } else {
-                        underlyingErrorCodeStr = "N/A"
-                    }
-
-                    return "Socket creation failed (\(underlyingErrorCodeStr))"
-                case .connectFailed(let underlyingErrorCode):
-                    return "Connect failed (\(underlyingErrorCode))"
+            case .socketCreationFailed(let code): "Socket creation failed (\(code.map(String.init) ?? "N/A"))"
+            case .connectFailed(let code): "Connect failed (\(code))"
+            case .operationFailed(let code): "Socket operation failed (\(code))"
+            case .cancelled: "Connection cancelled"
+            case .timedOut: "Connection timed out"
+            case .connectionClosed: "Connection closed"
             }
         }
     }

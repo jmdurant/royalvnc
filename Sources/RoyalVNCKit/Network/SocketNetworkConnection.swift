@@ -3,171 +3,216 @@ import FoundationEssentials
 #else
 import Foundation
 #endif
-
 import Dispatch
 
-// TODO: All of this is very hacky and NOT fully fleshed out!
-final class SocketNetworkConnection: NetworkConnection {
+final class SocketNetworkConnection: NetworkConnection, @unchecked Sendable {
     let settings: NetworkConnectionSettings
-
+    private let resolveAddress: (String, UInt16) throws -> AddressInfo
+#if canImport(Glibc) || canImport(Android) || canImport(WinSDK)
+    private let lock = Spinlock()
+#else
+    private let lock = NSLock()
+#endif
     private var socket: Socket?
+    private var queue = DispatchQueue(label: "RoyalVNCKit.Socket.status")
+    private let readQueue = DispatchQueue(label: "RoyalVNCKit.Socket.read")
+    private let writeQueue = DispatchQueue(label: "RoyalVNCKit.Socket.write")
+    private var handler: NetworkConnectionStatusUpdateHandler?
+    private var state: NetworkConnectionStatus = .setup
+    private var started = false
+    private var terminal = false
+    private var initializationError: Error?
 
-    // This will be replaced when calling start. Calling any other method before start (which would use this placeholder queue) is a programmer error.
-    private var queue = DispatchQueue(label: "PLACEHOLDER")
-
-    private(set) var statusUpdateHandler: NetworkConnectionStatusUpdateHandler?
-
-    private(set) var status: NetworkConnectionStatus = .unknown("None") {
-        didSet {
-            statusUpdateHandler?(status)
-        }
+    var status: NetworkConnectionStatus {
+        lock.lock()
+        defer { lock.unlock() }
+        return state
     }
 
-    init(settings: NetworkConnectionSettings) {
+    convenience init(settings: NetworkConnectionSettings) {
+        self.init(settings: settings, resolveAddress: { try AddressInfo(host: $0, port: $1) })
+    }
+
+    init(settings: NetworkConnectionSettings,
+         resolveAddress: @escaping (String, UInt16) throws -> AddressInfo) {
 #if os(Windows)
         do {
             try Winsock.intializeWinsock()
         } catch {
-            fatalError("Initializing Winsock failed: \(error.humanReadableDescription)")
+            initializationError = error
         }
 #endif
-
         self.settings = settings
+        self.resolveAddress = resolveAddress
     }
 
-    func setStatusUpdateHandler(_ statusUpdateHandler: NetworkConnectionStatusUpdateHandler?) {
-        self.statusUpdateHandler = statusUpdateHandler
+    func setStatusUpdateHandler(_ handler: NetworkConnectionStatusUpdateHandler?) {
+        lock.lock()
+        self.handler = handler
+        lock.unlock()
     }
 
     var isReady: Bool {
-        switch status {
-            case .ready:
-                true
-            default:
-                false
+        if case .ready = status { return true }
+        return false
+    }
+
+    /// Caller holds the lock; enqueuing here preserves notification order.
+    private func updateStatus(_ status: NetworkConnectionStatus) {
+        state = status
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.lock.lock()
+            let handler = self.handler
+            let shouldDeliver: Bool
+            switch status {
+            case .cancelled, .failed: shouldDeliver = true
+            default: shouldDeliver = !self.terminal
+            }
+            self.lock.unlock()
+            if shouldDeliver { handler?(status) }
         }
     }
 
     func cancel() {
-        // TODO
-        // fatalError("Not implemented")
+        lock.lock()
+        guard !terminal else { lock.unlock(); return }
+        terminal = true
+        let socket = self.socket
+        self.socket = nil
+        updateStatus(.cancelled)
+        lock.unlock()
+        socket?.cancel()
+    }
+
+    private func fail(_ error: Error) {
+        lock.lock()
+        guard !terminal else { lock.unlock(); return }
+        terminal = true
+        let socket = self.socket
+        self.socket = nil
+        updateStatus(.failed(error))
+        lock.unlock()
+        socket?.cancel()
     }
 
     func start(queue: DispatchQueue) {
-        self.status = .preparing
-        self.queue = queue
+        lock.lock()
+        guard !started, !terminal else { lock.unlock(); return }
+        started = true
+        self.queue = DispatchQueue(label: "RoyalVNCKit.Socket.status", target: queue)
+        updateStatus(.preparing)
+        lock.unlock()
 
-        queue.async { [weak self] in
+        if let initializationError {
+            fail(initializationError)
+            return
+        }
+
+        // Timeout includes DNS resolution. getaddrinfo itself cannot be interrupted,
+        // but a late result cannot publish a socket or revive a timed-out connection.
+        let deadline: DispatchTime? = settings.connectionTimeout > 0
+            ? .now() + .seconds(settings.connectionTimeout) : nil
+        if let deadline {
+            DispatchQueue.global().asyncAfter(deadline: deadline) { [weak self] in
+                guard let self else { return }
+                self.lock.lock()
+                guard !self.terminal, !self.isReadyLocked else { self.lock.unlock(); return }
+                self.terminal = true
+                let socket = self.socket
+                self.socket = nil
+                self.updateStatus(.failed(Socket.Errors.timedOut))
+                self.lock.unlock()
+                socket?.cancel()
+            }
+        }
+
+        DispatchQueue.global().async { [weak self] in
             guard let self else { return }
-
             do {
-                let addressInfo = try AddressInfo(host: settings.host,
-                                                               port: settings.port)
-
+                let addressInfo = try self.resolveAddress(self.settings.host, self.settings.port)
+                self.lock.lock()
+                guard !self.terminal else { self.lock.unlock(); return }
+                self.lock.unlock()
                 let socket = try Socket(addressInfo: addressInfo)
-
-                try socket.connect()
-
+                self.lock.lock()
+                guard !self.terminal else { self.lock.unlock(); socket.cancel(); return }
                 self.socket = socket
-                self.status = .ready
+                self.lock.unlock()
+                try socket.connect(deadline: deadline)
+                self.lock.lock()
+                if !self.terminal { self.updateStatus(.ready) }
+                self.lock.unlock()
             } catch {
-                self.status = .failed(error)
+                self.fail(error)
             }
         }
     }
+
+    private var isReadyLocked: Bool {
+        if case .ready = state { return true }
+        return false
+    }
+
+    private func readySocket() throws -> Socket {
+        lock.lock()
+        defer { lock.unlock() }
+        if case .cancelled = state { throw CancellationError() }
+        guard isReadyLocked, let socket else {
+            throw Socket.Errors.socketCreationFailed(underlyingErrorCode: nil)
+        }
+        return socket
+    }
+
+    deinit { socket?.cancel() }
 }
 
-// MARK: - Reading
 extension SocketNetworkConnection: NetworkConnectionReading {
-	func read(minimumLength: Int,
-              maximumLength: Int) async throws -> Data {
-        let queue = self.queue
-
-        guard let socket else {
-            throw Socket.Errors.socketCreationFailed(underlyingErrorCode: nil)
+    func read(minimumLength: Int, maximumLength: Int) async throws -> Data {
+        guard minimumLength >= 0, maximumLength >= minimumLength, maximumLength > 0 else {
+            if minimumLength == 0, maximumLength == 0 { return Data() }
+            throw VNCError.protocol(.invalidData)
         }
-
-        let bufferSize = maximumLength
-
-		return try await withCheckedThrowingContinuation { continuation in
-            queue.async {
-                var buffer = [UInt8](repeating: 0, count: bufferSize)
-                let bytesRead = socket.receive(buffer: &buffer)
-
-                // Handle connection closure
-                if bytesRead == 0 {
-                    // TODO
-                    continuation.resume(throwing: Errors.connectionClosed)
-
-                    return
+        let socket = try readySocket()
+        return try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            return try await withCheckedThrowingContinuation { continuation in
+                readQueue.async {
+                    do {
+                        var result = Data()
+                        repeat {
+                            var buffer = [UInt8](repeating: 0, count: min(maximumLength - result.count, 64 * 1024))
+                            let count = try socket.receive(buffer: &buffer)
+                            guard count > 0 else { throw Socket.Errors.connectionClosed }
+                            result.append(contentsOf: buffer.prefix(count))
+                        } while result.count < minimumLength
+                        continuation.resume(returning: result)
+                    } catch {
+                        self.fail(error)
+                        continuation.resume(throwing: error)
+                    }
                 }
-
-                // Handle errors during receiving
-                if bytesRead < 0 {
-                    // let errorNumber = errno
-                    // print("Error: \(errorNumber.hexString())")
-
-                    continuation.resume(throwing: VNCError.protocol(.noData))
-
-                    return
-                }
-
-                // Slice the buffer to get only the received data
-                let receivedData = Array(buffer.prefix(.init(bytesRead)))
-                let receivedLength = receivedData.count
-
-                // Validate received data length
-                guard receivedLength >= minimumLength,
-                      receivedLength <= maximumLength else {
-                    continuation.resume(throwing: VNCError.protocol(.invalidData))
-
-                    return
-                }
-
-                continuation.resume(returning: Data(receivedData))
             }
-        }
-	}
+        } onCancel: { self.cancel() }
+    }
 }
 
-// MARK: - Writing
 extension SocketNetworkConnection: NetworkConnectionWriting {
-	func write(data: Data) async throws {
-        let queue = self.queue
-
-        guard let socket else {
-            throw Socket.Errors.socketCreationFailed(underlyingErrorCode: nil)
-        }
-
-		return try await withCheckedThrowingContinuation { continuation in
-            queue.async {
-                let bytesToSend = [UInt8](data)
-                let bytesSent = socket.send(buffer: bytesToSend)
-
-                if bytesSent < 0 {
-                    continuation.resume(throwing: Errors.sendFailed)
-                } else {
-                    continuation.resume()
+    func write(data: Data) async throws {
+        let socket = try readySocket()
+        try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                writeQueue.async {
+                    do {
+                        try socket.sendAll(buffer: Array(data))
+                        continuation.resume()
+                    } catch {
+                        self.fail(error)
+                        continuation.resume(throwing: error)
+                    }
                 }
             }
-        }
-	}
-}
-
-// MARK: - Errors
-private extension SocketNetworkConnection {
-    // MARK: - Enum for Socket Errors
-    enum Errors: LocalizedError {
-        case sendFailed
-        case connectionClosed
-
-        var errorDescription: String? {
-            switch self {
-                case .sendFailed:
-                    "Send failed"
-                case .connectionClosed:
-                    "Connection closed"
-            }
-        }
+        } onCancel: { self.cancel() }
     }
 }

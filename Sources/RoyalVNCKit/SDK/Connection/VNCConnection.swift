@@ -104,7 +104,7 @@ public final class VNCConnection: NSObjectOrAnyObject {
             VNCFrameEncodingType.zlib.rawValue: VNCProtocol.ZlibEncoding(zStream: sharedZStream),
 			VNCFrameEncodingType.zrle.rawValue: VNCProtocol.ZRLEEncoding(zStream: sharedZRLEZStream),
 			VNCFrameEncodingType.hextile.rawValue: hextileEncoding,
-			VNCFrameEncodingType.coRRE.rawValue: VNCProtocol.RREEncoding(),
+			VNCFrameEncodingType.coRRE.rawValue: VNCProtocol.CoRREEncoding(),
 			VNCFrameEncodingType.rre.rawValue: VNCProtocol.RREEncoding(),
 			VNCFrameEncodingType.raw.rawValue: rawEncoding,
 

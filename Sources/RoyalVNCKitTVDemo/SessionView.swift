@@ -1,4 +1,5 @@
 #if os(tvOS)
+import RoyalVNCClientCore
 import SwiftUI
 import RoyalVNCKit
 import GameController
